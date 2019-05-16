@@ -1,0 +1,16 @@
+{
+  "dependencies": {
+    "global": "^4.3.2",
+    "parcel-bundler": "^1.12.3"
+  },
+  "name": "yaii",
+  "version": "1.0.0",
+  "description": "Yet Another Interpreter Interpreter",
+  "main": "index.js",
+  "repository": "https://github.com/JannikWibker/yaii",
+  "author": "Jannik Wibker",
+  "license": "MIT",
+  "scripts": {
+    "dev": "parcel"
+  }
+}
