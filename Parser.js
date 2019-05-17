@@ -58,6 +58,14 @@ const find_path_to_non_terminal = (rules, current_rule, target_rule, path=new Se
   return path
 }
 
+const reduce_rule = (rule, amount) => {
+  const new_inner_rules = []
+  for(let i = 0; i < rule.length; i++) {
+    new_inner_rule[i] = rule[i].slice(amount)
+  }
+  return new_inner_rules.filter(rule => rule.length > 0)
+}
+
 const reduce_rules = (rules, amount) => {
   const new_rules = []
 
@@ -97,6 +105,35 @@ const map_rules_to_references = (rule_references, rules) => {
   return new_rules
 }
 
+const reduce_rule_object = (rules, amount) => map_rules_to_references(Object.keys(rules), reduce_rules(Object.values(rules), 1))
+
+const get_precedence = (rules, rule) => Object.keys(rules).indexOf(rule)+1 // +1 since indices are zero-based
+
+const get_missing_portions = (rules, rule, tokens) => {
+
+  let new_rules = rules
+
+  for(let i = 0; i < tokens.length; i++) {
+    const token = tokens[i]
+
+    let has_path_to_token
+
+    if(typeof token === 'string') {
+      has_path_to_token = !!Array.from(find_path_to_terminal(new_rules, rule, token, new Set(), 0))[0]
+    } else if(typeof token === 'object') {
+      has_path_to_token = !!Array.from(find_path_to_non_terminal(new_rules, rule, token.rule, new Set(), 0))[0]
+    }
+
+    if(has_path_to_token) {
+      new_rules = reduce_rule_object(new_rules, 1)
+    } else {
+      break
+    }
+  }
+
+  return new_rules[rule][0] // at this point only one sub-rule should remain, this is why the first element is taken, if this did not happen an array of arrays would be returned
+}
+
 const Parser = function(input, options) {
 
   const {ast, rules} = this
@@ -114,6 +151,7 @@ const Parser = function(input, options) {
 
   let stop = false
 
+  // main loop through the TokenStream. `stop` is used to break incase of a syntax error
   while(i+1 < input.length && !stop) {
 
     token = input[i]
@@ -127,31 +165,93 @@ const Parser = function(input, options) {
       [...stack]
     )
 
-    // current token
-
+    // matching rule for current token
     const matching_rules = Array.from(find_path_to_terminal(rules, current_rule, token, new Set(), 0))
-
     console.log('matching rule for (only) token', matching_rules)
 
-    i++;
+    i++; // incrementing i already, if look-ahead works i is also incremted again there
 
     // look-ahead token
 
+    // check if there even is a next_token. Could be that the end of the TokenStream is reached
     if(i < input.length) {
+
+      // take the rule with the lowest precedence of all matching rules and use that as a starting point for next_token
       current_rule = matching_rules[0]
 
-      const reduced_rules = map_rules_to_references(matching_rules, reduce_rules(get_rules_by_reference(rules, matching_rules), 1))
-
+      // reduce the rules by 1, this is done since the first part of the rule should have 
+      // already been matched with token, now next_token is checked against the following portions of
+      // the rules. This is done because tokens can only be checked against the first portion of a rule
+      const reduced_rules = map_rules_to_references(matching_rules, reduce_rules(get_rules_by_reference(rules, matching_rules), 1)) 
+      
       if(SUPER_VERBOSE) console.log('reduced rules', reduced_rules)
 
       let reduced_matching_rule
 
+      // here the actual search for a matching rule is done. It should really only match one
+      // rule in total, but if more are matched the one with the highest precedence is taken
       for(let i = 0; i < matching_rules.length; i++) {
         reduced_matching_rule = last(Array.from(find_path_to_terminal(reduced_rules, matching_rules[i], next_token, new Set(), 0))) || reduced_matching_rule
       }
 
-      // reduced_matching_rules sind alle rules die immernoch matchen, es sollte sich nur um eine handeln, da nur ein Look-Ahead von 1 unterstützt wird. 
+      // incase a rule matches check the precedences (missing on the stack vs. current rule)
+      // - precedence of matching rule is higher: push to stack
+      // - precedence of matching rule is equal: try to integrate into rule on the stack
+      // - precedence is lower: process `token` alone
+      if(reduced_matching_rule || stack.length === 0) {
+        if(stack.length === 0) {
+          stack.push({
+            rule: reduced_matching_rule,
+            children: reduced_matching_rule ? [token, next_token] : [token]
+          })
+        } else {
+          
+          const missing_portions = get_missing_portions(rules, last(stack).rule, last(stack).children)
 
+          // if a terminal is the item in the array of missing portions it's precedence is the
+          // precedence of it's own rule, if another rule is referenced the precedence of that rule is taken
+          const missing_precedence = get_precedence(rules, isTerminal(missing_portions[0]) ? last(stack).rule : missing_portions[0])
+          const new_precedence = get_precedence(rules, reduced_matching_rule)
+          const relation = new_precedence > missing_precedence ? 1 : new_precedence < missing_precedence ? -1 : 0
+
+          console.log('still missing from rule "%c%s%c":', 'color: #ef6c00', last(stack).rule, 'color: black', missing_portions)
+          console.log({...last(stack)})
+          console.log(
+            'precedences: missing from stack: %c%s%c\n             matched rule (new): %c%s%c\n\ncomparing precedences: (new) %d %s %d (missing from stack) -> %c%s%c',
+            'color: #ef6c00', missing_precedence, 'color: black',
+            'color: #ef6c00', new_precedence, 'color: black',
+            new_precedence,
+            relation === 1 ? '>' : relation === 0 ? '=' : '<',
+            missing_precedence,
+            'font-weight: 700', relation === 1 ? 'push' : relation === 0 ? 'integrate' : 'backtrack', 'font-weight: initial'
+          )
+
+          if(relation === 1) { // push to stack
+            stack.push({
+              rule: reduced_matching_rule,
+              children: [token, next_token]
+            })
+          } else if(relation === 0) { // integrate into previous rule
+            stack[stack.length-1].children.push({
+              rule: reduced_matching_rule,
+              children: [token, next_token]
+            })
+          } else if(relation === -1) { // do the backtracking and stuff
+            // here we have to check if only token would match anything. We already
+            // have the list of things that token matches (`matching_rules`) so we just
+            // have to choose the one with the highest precedence and try the precedence check again
+            // NOTE: what if the rule on the stack is already completed? could that case exist or is
+            // that taken care of by something else? tbh idk
+            // NOTE: when will i be incremented?
+          }
+        }
+      } else {
+        
+      }
+
+      // the following code is slowly getting migrated into the above, this code will be gone soon (hopefully).
+
+      // incase no rule matches both token and next_token:
       if(!reduced_matching_rule) {
 
         if(SUPER_VERBOSE) console.log('the tokens "%c%s%c" and "%c%s%c" did not produce a match. Trying only "%c%s%c" now.', 'color: #ef6c00', token, 'color: black', 'color: #ef6c00', next_token, 'color: black', 'color: #ef6c00', token, 'color: black')
@@ -209,8 +309,15 @@ const Parser = function(input, options) {
 
         i++
 
+      // incase a rule matches check the precedences
+      // - precedence of matching rule is higher: push to stack
+      // - precedence of matching rule is equal: try to integrate into rule on the stack
+      // - precedence is lower: process `token` alone
       } else {
-        console.log('matching rule for token and next_token: "%c%s%c"', 'color: #ef6c00', reduced_matching_rule, 'color: black')
+        console.log(
+          'matching rule for token and next_token: "%c%s%c"',
+          'color: #ef6c00', reduced_matching_rule, 'color: black'
+        )
 
         stack.push({
           rule: reduced_matching_rule,

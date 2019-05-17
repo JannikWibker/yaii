@@ -23,7 +23,9 @@ Method:
 - **(1)** search for matching rules for `token` and `next_token`
 - **(2)** push the match to the `stack`
 - **(3)** take a look what parts of the rule on the `stack` are still missing
-  - **(3.1)** nothing missing: **parsing complete**
+  - **(3.1)** nothing missing: are there still more tokens:
+    - **(3.1.1)**: yes: lower the precedence of the rule on the `stack` till a rule matches for teh current rule on the stack and the `token`. While searching use the rule as `token` and the original `token` as `next_token`, continue to **(3.2.1)**
+    - **(3.1.2)**: no: **parsing complete**
   - **(3.2)** still something missing:
     - **(3.2.1)** continue to the next tokens
     - **(3.2.2)** search for matching rules for `token` and `next_token` (if no `next_token` is available continue to **(3.2.2.3)**)
@@ -43,6 +45,57 @@ Method:
           - **(3.2.4.1)** no: continue to **(3.2.4.1.2)**
         - **(3.2.4.1.2)** no: continue to **(3.2.1)**
 
-> When either **(3.1)** or **(3.2.4.1.1.1.1)** are reached parsing is complete.
+> When either **(3.1.2)** or **(3.2.4.1.1.1.1)** are reached parsing is complete.
 > 
 > Whenever no matching rule is found but one should exist a syntax error has occured
+
+Pseudo-code
+
+```js
+let i = 0
+let token
+let next_token
+while(i+1 < input.length) {
+  token = input[i]
+  next_token = input[i+1]
+
+  const matching_rule = find_matching_rule(token, next_token)
+
+  i++
+
+  if(matching_rule) {
+    if(stack.isEmpty() || matching_rule.precedence > stack.top().precedence) { stack.push(matching_rule); i++ }
+    else if(matching_rule.precedence === stack.top().precedence) { stack.top().integrate_rule(matching_rule); i++ }
+    else if(matching_rule.precedence < stack.top().precedence) {
+
+      const matching_rule = find_matching_rule(token)
+      if(matching_rule.precedence >= stack.top().precedence) stack.top().integrate_rule(matching_rule)
+      else if(matching_rule.precedence < stack.top().precedence) syntax_error()
+
+    }
+
+    if(stack.top().is_completed()) {
+      for(let i = 0; i < stack.size(); i++) {
+        if(stack.top().is_completed()) {
+          if(stack.size() !== 1) {
+            stack.top().integrate_rule(stack.pop())
+          } else {
+            // there are more tokens left, so try to lower the precedence of the last rule on the stack and try finding a match
+          }
+          
+        } else {
+          break
+        }
+      }
+    }
+
+  } else {
+    if(!next_token) {
+      // there are no more tokens left; trying to integrate token into the stack
+
+    } else {
+      syntax_error()
+    }
+  }
+}
+```
