@@ -179,25 +179,25 @@ lib.IF((lib.GET('C1') > (lib.GET('C2') || lib.GET('C3'))) && lib.GET('C4') !== '
 | ---------- | ------------- | ------------- | ---------------- |
 | 11 | Parenthesis           | n/a           | `( ... )`        |
 | 10 | Function Call         | left-to-right | `... ( ... )`    |
-|  9 | Logical NOT           | right-to-left | `! ...`          |
-|  9 | Unary Plus            | right-to-left | `+ ...`          |
-|  9 | Unary Minus           | right-to-left | `- ...`          |
-|  9 | Unary Factorial       | left-to-right | `... !`          |
-|  8 | Exponentiation        | right-to-left | `... ^ ...`      |
-|  7 | Multiplication        | left-to-right | `... * ...`      |
-|  7 | Division              | left-to-right | `... / ...`      |
-|  7 | Modulo                | left-to-right | `... % ...`      |
-|  6 | Addition              | left-to-right | `... + ...`      |
-|  6 | Subtraction           | left-to-right | `... - ...`      |
-|  5 | Less Than             | right-to-left | `... < ...`      |
-|  5 | Less Than Or Equal    | right-to-left | `... >= ...`     |
-|  5 | Greater Than          | right-to-left | `... > ...`      |
-|  5 | Greater Than Or Equal | right-to-left | `... >= ...`     |
-|  4 | Equality              | right-to-left | `... == ...`     |
-|  4 | Inequality            | right-to-left | `... != ...`     |
-|  3 | Logical AND           | right-to-left | `... && ...`     |
-|  2 | Logical OR            | right-to-left | `... || ...`     |
-|  1 | Range                 | left-to-right | `...:...`        |
+|  9 | Range                 | left-to-right | `...:...`        |
+|  8 | Logical NOT           | right-to-left | `! ...`          |
+|  8 | Unary Plus            | right-to-left | `+ ...`          |
+|  8 | Unary Minus           | right-to-left | `- ...`          |
+|  8 | Unary Factorial       | left-to-right | `... !`          |
+|  7 | Exponentiation        | right-to-left | `... ^ ...`      |
+|  6 | Multiplication        | left-to-right | `... * ...`      |
+|  6 | Division              | left-to-right | `... / ...`      |
+|  6 | Modulo                | left-to-right | `... % ...`      |
+|  5 | Addition              | left-to-right | `... + ...`      |
+|  5 | Subtraction           | left-to-right | `... - ...`      |
+|  4 | Less Than             | right-to-left | `... < ...`      |
+|  4 | Less Than Or Equal    | right-to-left | `... >= ...`     |
+|  4 | Greater Than          | right-to-left | `... > ...`      |
+|  4 | Greater Than Or Equal | right-to-left | `... >= ...`     |
+|  3 | Equality              | right-to-left | `... == ...`     |
+|  3 | Inequality            | right-to-left | `... != ...`     |
+|  2 | Logical AND           | right-to-left | `... && ...`     |
+|  1 | Logical OR            | right-to-left | `... || ...`     |
 
 ## BNF / EBNF - Grammar
 

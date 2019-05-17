@@ -104,12 +104,38 @@ const rules = {
     ['prec_4', '@==', 'prec_5']
   ],
   prec_5: [
+    ['prec_6'],
+    ['prec_5', '@>', 'prec_6']
+  ],
+  prec_6: [
+    ['prec_7'],
+    ['prec_6', '@+', 'prec_7'],
+    ['prec_6', '@-', 'prec_7']
+  ],
+  prec_7: [
+    ['prec_8'],
+    ['prec_7', '@*', 'prec_8'],
+    ['prec_7', '@/', 'prec_8'],
+    ['prec_7', '@%', 'prec_8']
+  ],
+  prec_8: [
+    ['prec_9'],
+    ['prec_8', '@^', 'prec_9']
+  ],
+  prec_9: [
     ['prec_10'],
-    ['prec_5', '@>', 'prec_10']
+    // ['@!', 'prec_10'],
+    // ['@+', 'prec_10'],
+    // ['@-', 'prec_10'],
+    ['prec_10', '@!']
   ],
   prec_10: [
-    ['id'],
+    ['prec_11'],
     ['id', '@(', 'prec_1', '@)']
+  ],
+  prec_11: [
+    ['id'],
+    // ['@(', 'prec_1', '@)']
   ],
   id: [
     ['@id']
@@ -128,10 +154,14 @@ const Parser = _Parser({
 
 const parser = (input, options) => {
   // return Parser(TokenStream(InputStream(input, options), options), options)
-  return Parser(['id', '(', 'id', '>', 'id', ')'], options)
+  return Parser(['id', '(', 'id', '>', 'id', '+', 'id', ')'], options)
+  // return Parser(['id', '(', '(', 'id', '>', '(', 'id', '||', 'id', ')', ')', '&&', 'id', '!=', 'id', ',', '(', 'id', '(', 'id', ':', 'id', ')', '+', 'id', ')', '%', 'id', ',', 'id', '(', 'id', ':', 'id', ')', ')'], options)
   // return Parser(['id', '>', 'id'], options)
+  // return Parser(["id", "(", "id", ">", "id", ",", "id", ",", "id", ")"], options)
 }
 
 parser()
 
 export default parser
+
+['id', '(', '(', 'id', '>', '(', 'id', '||', 'id', ')', ')', '&&', 'id', '!=', 'id', ',', '(', 'id', '(', 'id', ':', 'id', ')', '+', 'id', ')', '%', 'id', ',', 'id', '(', 'id', ':', 'id', ')', ')']
