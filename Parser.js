@@ -119,13 +119,19 @@ const Parser = function(input, options) {
     token = input[i]
     next_token = input[i+1]
 
-    console.log('token:       "%c%s%c"\nnext_token:  "%c%s%c"\n\nstack:', 'color: #ef6c00', token, 'color: black', 'color: #ef6c00', next_token, 'color: black', [...stack])
+    console.log(
+      'token:           "%c%s%c"\nnext_token:      "%c%s%c"\nalready parsed:  "%c%s%c"\n\nstack:', 
+      'color: #ef6c00', token, 'color: black', 
+      'color: #ef6c00', next_token, 'color: black', 
+      'color: #ef6c00', input.slice(0, i).join(''), 'color: black',
+      [...stack]
+    )
 
     // current token
 
     const matching_rules = Array.from(find_path_to_terminal(rules, current_rule, token, new Set(), 0))
 
-    console.log('find_path_to_terminal', matching_rules)
+    console.log('matching rule for (only) token', matching_rules)
 
     i++;
 
@@ -162,7 +168,7 @@ const Parser = function(input, options) {
 
         stack[stack.length-1].children.push(token)
 
-        console.log('stack:', [...stack]) // this is only a shallow copy, when inspecting in the console it might lead to somewhat incorrect results (children being displayed incorrectly, ...)
+        console.log('stack (shallow copy):', [...stack])
 
         // here is probably the point where we should start iterating the stack from top to bottom and try to integrate stuff into the rule before the current. 
 
@@ -180,7 +186,7 @@ const Parser = function(input, options) {
             if(SUPER_VERBOSE) console.log('rule "%c%s%c" can be integrated into "%c%s%c"', 'color: #ef6c00', stack[i].rule, 'color: black', 'color: #ef6c00', stack[i-1].rule, 'color: black')
 
             stack[i-1].children.push(stack.pop())
-            console.log('stack:', [...stack])
+            console.log('stack (shallow copy):', [...stack])
           }
         }
 
@@ -204,7 +210,7 @@ const Parser = function(input, options) {
         i++
 
       } else {
-        console.log('reduced_find_path_to_terminal "%c%s%c"', 'color: #ef6c00', reduced_matching_rule, 'color: black')
+        console.log('matching rule for token and next_token: "%c%s%c"', 'color: #ef6c00', reduced_matching_rule, 'color: black')
 
         stack.push({
           rule: reduced_matching_rule,
