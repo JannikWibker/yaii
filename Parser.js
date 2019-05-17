@@ -230,8 +230,8 @@ const Parser = function(input, options) {
       // - precedence is lower: process `token` alone
       if(reduced_matching_rule || stack.length === 0) {
         if(stack.length === 0) {
-          i++
           if(reduced_matching_rule) {
+            i++
             stack.push({
               rule: reduced_matching_rule,
               children: [token, next_token],
@@ -294,15 +294,39 @@ const Parser = function(input, options) {
             // NOTE: when will i be incremented?
 
             if(SUPER_VERBOSE) console.log('the tokens "%c%s%c" and "%c%s%c" did not produce a match. Trying only "%c%s%c" now.', 'color: #ef6c00', token, 'color: black', 'color: #ef6c00', next_token, 'color: black', 'color: #ef6c00', token, 'color: black')
-            if(SUPER_VERBOSE) console.log('highest matching rule for "%c%s%c" is: "%c%s%c"', 'color: #ef6c00', token, 'color: black', 'color: #ef6c00', matching_rules.reverse()[0], 'color: black')
+            if(SUPER_VERBOSE) console.log('highest matching rule for "%c%s%c" is: "%c%s%c"', 'color: #ef6c00', token, 'color: black', 'color: #ef6c00', last(matching_rules), 'color: black')
             if(SUPER_VERBOSE) console.log('trying to append to last rule on the stack')
           }
         }
       } else {
-        console.log('hello there')
+        console.log('hello there', token, next_token, i, input.length)
         console.log(stack)
+        if(SUPER_VERBOSE) console.log('the tokens "%c%s%c" and "%c%s%c" did not produce a match. Trying only "%c%s%c" now.', 'color: #ef6c00', token, 'color: black', 'color: #ef6c00', next_token, 'color: black', 'color: #ef6c00', token, 'color: black')
+        if(SUPER_VERBOSE) console.log('highest matching rule for "%c%s%c" is: "%c%s%c"', 'color: #ef6c00', token, 'color: black', 'color: #ef6c00', last(matching_rules), 'color: black')
+        if(SUPER_VERBOSE) console.log('trying to append to last rule on the stack')
+
+        const missing_portions = last(stack).missing
+        // if a terminal is the item in the array of missing portions it's precedence is the
+        // precedence of it's own rule, if another rule is referenced the precedence of that rule is taken
+        const missing_precedence = get_precedence(rules, isTerminal(missing_portions[0]) ? last(stack).rule : missing_portions[0])
+
+        const new_precedence = get_precedence(rules, matching_rules[0])
+
+        console.log(missing_portions, missing_precedence, new_precedence)
+
+        // compare the precedences (new_precedence vs missing_precedence)
+        // - higher: integrate into rule on the stack
+        // - equal: idk
+        // - lower: idk (look at the case "()!", the factorial has a lower precedence, meaning
+        //          that it should come higher in the whole AST, does this mean that the stack
+        //          should be iterated from top to bottom and the factorial rule should be sorted 
+        //          into a spot with rules of higher precedence above it and rules with lower
+        //          precedence below it?; is this the way to handle lower precedence on the right
+        //          of the currently read input?; should this also be done when token and next_token
+        //          produce a match but the precedence is lower or what should then be done?)
+
         // what happens here?
-        // only token should be parsed and it should be tried to integrate token into the rule on the stack, that is what should happen
+        // only token should be parsed and it should be attempted to integrate it into the rule on the stack, that is what should happen
       }
 
       // the following code is slowly getting migrated into the above, this code will be gone soon (hopefully).
