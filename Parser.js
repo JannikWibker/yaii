@@ -80,12 +80,6 @@ const reduce_rules = (rules, amount) => {
   return new_rules
 }
 
-// const reduce_rules = (rules, amount) =>
-//   rules.map(rule => rule
-//     .map(rule => rule.slice(amount))
-//     .filter(rule => rule.length > 0)
-//   )
-
 const get_rules_by_reference = (rules, rule_references) => {
   const new_rules = []
 
@@ -94,7 +88,6 @@ const get_rules_by_reference = (rules, rule_references) => {
 
   return new_rules
 }
-
 
 const map_rules_to_references = (rule_references, rules) => {
   const new_rules = {}
@@ -131,7 +124,38 @@ const get_missing_portions = (rules, rule, tokens) => {
     }
   }
 
-  return new_rules[rule][0] // at this point only one sub-rule should remain, this is why the first element is taken, if this did not happen an array of arrays would be returned
+  if(new_rules[rule].length === 0) return []
+
+  return new_rules[rule][0] // at this point only one sub-rule should remain, this is why the first element is taken, if this did not happen an array of arrays would be returned. Incase that nothing exists anymore an empty array is returned
+}
+
+const try_to_reduce_stack = (rules, stack) => {
+  // iterating from top to bottom+1 since one rule should still remain there. breaking if can't integrate further
+  for(let i = stack.length-1; i > 1; i--) {
+    if(SUPER_VERBOSE) console.log('try_to_reduce_stack_current_stack_item:', stack[i])
+    if(SUPER_VERBOSE) console.log(get_missing_portions(rules, stack[i].rule, stack[i].children))
+    if(SUPER_VERBOSE) console.log('does "%c%s%c" (%s) fit into "%c%s%c" (%s)?', 'color: #ef6c00', stack[i].rule, 'color: black', stack[i].children.join(' '), 'color: #ef6c00', stack[i-1].rule, 'color: black', stack[i-1].children.join(' '))
+    if(get_missing_portions(rules, stack[i].rule, stack[i].children).length === 0) {
+      // stack[i] is completed
+      const missing_from_previous = get_missing_portions(rules, stack[i-1].rule, stack[i-1].children)
+      const amount_to_reduce = stack[i-1].children.length
+      const new_rules = reduce_rule_object(rules, amount_to_reduce)
+      const path_from_previous_to_current = Array.from(find_path_to_non_terminal(new_rules, stack[i-1].rule, stack[i].rule, new Set(), 0))
+
+      if(SUPER_VERBOSE) console.log(
+        'missing_from_previous:', missing_from_previous,
+        'amount_to_reduce:', amount_to_reduce,
+        'new_rules:', new_rules,
+        'path_from_previous_to_current:', path_from_previous_to_current
+      )
+
+      if(last(path_from_previous_to_current) === stack[i].rule) {
+        if(SUPER_VERBOSE) console.log('rule "%c%s%c" can be integrated into "%c%s%c"', 'color: #ef6c00', stack[i].rule, 'color: black', 'color: #ef6c00', stack[i-1].rule, 'color: black')
+        stack[i-1].children.push(stack.pop())
+        stack[i-1].missing.filter((_, i) => i !== 0) // filter out the first element since this is the one that was just integrated
+      }
+    }
+  }
 }
 
 const Parser = function(input, options) {
@@ -188,11 +212,17 @@ const Parser = function(input, options) {
 
       let reduced_matching_rule
 
+      console.log('searching for a match of both token and next_token now')
+
       // here the actual search for a matching rule is done. It should really only match one
       // rule in total, but if more are matched the one with the highest precedence is taken
       for(let i = 0; i < matching_rules.length; i++) {
         reduced_matching_rule = last(Array.from(find_path_to_terminal(reduced_rules, matching_rules[i], next_token, new Set(), 0))) || reduced_matching_rule
       }
+
+      console.log('reduced_matching_rule', reduced_matching_rule)
+
+      if(!reduced_matching_rule) console.log(token, next_token)
 
       // incase a rule matches check the precedences (missing on the stack vs. current rule)
       // - precedence of matching rule is higher: push to stack
@@ -200,10 +230,20 @@ const Parser = function(input, options) {
       // - precedence is lower: process `token` alone
       if(reduced_matching_rule || stack.length === 0) {
         if(stack.length === 0) {
-          stack.push({
-            rule: reduced_matching_rule,
-            children: reduced_matching_rule ? [token, next_token] : [token]
-          })
+          i++
+          if(reduced_matching_rule) {
+            stack.push({
+              rule: reduced_matching_rule,
+              children: [token, next_token],
+              missing: get_missing_portions(rules, reduced_matching_rule, [token, next_token])
+            })
+          } else {
+            stack.push({
+              rule: reduced_matching_rule,
+              children: [token],
+              missing: get_missing_portions(rules, reduced_matching_rule, [token])
+            })
+          }
         } else {
           
           const missing_portions = get_missing_portions(rules, last(stack).rule, last(stack).children)
@@ -229,13 +269,22 @@ const Parser = function(input, options) {
           if(relation === 1) { // push to stack
             stack.push({
               rule: reduced_matching_rule,
-              children: [token, next_token]
+              children: [token, next_token],
+              missing: get_missing_portions(rules, reduced_matching_rule, [token, next_token])
             })
+
+            i++
+
           } else if(relation === 0) { // integrate into previous rule
             stack[stack.length-1].children.push({
               rule: reduced_matching_rule,
-              children: [token, next_token]
+              children: [token, next_token],
+              missing: get_missing_portions(rules, reduced_matching_rule, [token, next_token])
             })
+
+            i++
+            // should now try to reduce stack
+            try_to_reduce_stack(rules, stack)
           } else if(relation === -1) { // do the backtracking and stuff
             // here we have to check if only token would match anything. We already
             // have the list of things that token matches (`matching_rules`) so we just
@@ -243,95 +292,103 @@ const Parser = function(input, options) {
             // NOTE: what if the rule on the stack is already completed? could that case exist or is
             // that taken care of by something else? tbh idk
             // NOTE: when will i be incremented?
+
+            if(SUPER_VERBOSE) console.log('the tokens "%c%s%c" and "%c%s%c" did not produce a match. Trying only "%c%s%c" now.', 'color: #ef6c00', token, 'color: black', 'color: #ef6c00', next_token, 'color: black', 'color: #ef6c00', token, 'color: black')
+            if(SUPER_VERBOSE) console.log('highest matching rule for "%c%s%c" is: "%c%s%c"', 'color: #ef6c00', token, 'color: black', 'color: #ef6c00', matching_rules.reverse()[0], 'color: black')
+            if(SUPER_VERBOSE) console.log('trying to append to last rule on the stack')
           }
         }
       } else {
-        
+        console.log('hello there')
+        console.log(stack)
+        // what happens here?
+        // only token should be parsed and it should be tried to integrate token into the rule on the stack, that is what should happen
       }
 
       // the following code is slowly getting migrated into the above, this code will be gone soon (hopefully).
 
       // incase no rule matches both token and next_token:
-      if(!reduced_matching_rule) {
+      // if(!reduced_matching_rule) {
 
-        if(SUPER_VERBOSE) console.log('the tokens "%c%s%c" and "%c%s%c" did not produce a match. Trying only "%c%s%c" now.', 'color: #ef6c00', token, 'color: black', 'color: #ef6c00', next_token, 'color: black', 'color: #ef6c00', token, 'color: black')
-        if(SUPER_VERBOSE) console.log('highest matching rule for "%c%s%c" is: "%c%s%c"', 'color: #ef6c00', token, 'color: black', 'color: #ef6c00', matching_rules.reverse()[0], 'color: black')
-        if(SUPER_VERBOSE) console.log('trying to append to last rule on the stack')
+      //   // if(SUPER_VERBOSE) console.log('the tokens "%c%s%c" and "%c%s%c" did not produce a match. Trying only "%c%s%c" now.', 'color: #ef6c00', token, 'color: black', 'color: #ef6c00', next_token, 'color: black', 'color: #ef6c00', token, 'color: black')
+      //   // if(SUPER_VERBOSE) console.log('highest matching rule for "%c%s%c" is: "%c%s%c"', 'color: #ef6c00', token, 'color: black', 'color: #ef6c00', matching_rules.reverse()[0], 'color: black')
+      //   // if(SUPER_VERBOSE) console.log('trying to append to last rule on the stack')
         
-        const twice_reduced_rules = map_rules_to_references(matching_rules, reduce_rules(get_rules_by_reference(reduced_rules, matching_rules), 1))
+      //   const twice_reduced_rules = map_rules_to_references(matching_rules, reduce_rules(get_rules_by_reference(reduced_rules, matching_rules), 1))
 
-        const has_path_to_terminal = !!Array.from(find_path_to_terminal(twice_reduced_rules, last(stack).rule, token, new Set(), 0))[0]
+      //   const has_path_to_terminal = !!Array.from(find_path_to_terminal(twice_reduced_rules, last(stack).rule, token, new Set(), 0))[0]
 
-        console.log('has_path_to_terminal', has_path_to_terminal)
+      //   // console.log('has_path_to_terminal', has_path_to_terminal)
 
-        if(SUPER_VERBOSE) console.log('if the previous call returned an array (%s) we now know that the rule has a path to the terminal symbol we are checking. This means we can insert the terminal into the rule on the stack', has_path_to_terminal ? 'id did' : 'id did not')
+      //   if(SUPER_VERBOSE) console.log('if the previous call returned an array (%s) we now know that the rule has a path to the terminal symbol we are checking. This means we can insert the terminal into the rule on the stack', has_path_to_terminal ? 'id did' : 'id did not')
 
-        stack[stack.length-1].children.push(token)
+      //   stack[stack.length-1].children.push(token)
 
-        console.log('stack (shallow copy):', [...stack])
+      //   // console.log('stack (shallow copy):', [...stack])
 
-        // here is probably the point where we should start iterating the stack from top to bottom and try to integrate stuff into the rule before the current. 
+      //   // here is probably the point where we should start iterating the stack from top to bottom and try to integrate stuff into the rule before the current. 
 
-        for(let i = stack.length-1; i > 1; i--) { // iterating from top to bottom+1 since one rule should still remain there. breaking if cant integrate further
-          // stack[i] // current stack item
-          console.log('iterating stack now, trying to integrate rules into each other', stack[i])
-          console.log('does "%c%s%c" (%s) fit into "%c%s%c" (%s)?', 'color: #ef6c00', stack[i].rule, 'color: black', stack[i].children.join(' '), 'color: #ef6c00', stack[i-1].rule, 'color: black', stack[i-1].children.join(' '))
+      //   try_to_reduce_stack(rules, stack)
 
-          const path_from_previous_to_current = Array.from(find_path_to_non_terminal(twice_reduced_rules, stack[i-1].rule, stack[i].rule, new Set(), 0))
+      //   // for(let i = stack.length-1; i > 1; i--) { // iterating from top to bottom+1 since one rule should still remain there. breaking if cant integrate further
+      //   //   // stack[i] // current stack item
+      //   //   console.log('iterating stack now, trying to integrate rules into each other', stack[i])
+      //   //   console.log('does "%c%s%c" (%s) fit into "%c%s%c" (%s)?', 'color: #ef6c00', stack[i].rule, 'color: black', stack[i].children.join(' '), 'color: #ef6c00', stack[i-1].rule, 'color: black', stack[i-1].children.join(' '))
+
+      //   //   const path_from_previous_to_current = Array.from(find_path_to_non_terminal(twice_reduced_rules, stack[i-1].rule, stack[i].rule, new Set(), 0))
           
-          if(SUPER_VERBOSE) console.log('this is the path that was found:', path_from_previous_to_current)
-          if(SUPER_VERBOSE) console.log('if the array has "%c%s%c" at the end (%s), then there exists a path meaning that the current rule can be integrated into the previous rule', 'color: #ef6c00', stack[i].rule, 'color: black', last(path_from_previous_to_current) === stack[i].rule ? 'which it does' : 'which it does not')
+      //   //   if(SUPER_VERBOSE) console.log('this is the path that was found:', path_from_previous_to_current)
+      //   //   if(SUPER_VERBOSE) console.log('if the array has "%c%s%c" at the end (%s), then there exists a path meaning that the current rule can be integrated into the previous rule', 'color: #ef6c00', stack[i].rule, 'color: black', last(path_from_previous_to_current) === stack[i].rule ? 'which it does' : 'which it does not')
 
-          if(last(path_from_previous_to_current) === stack[i].rule) {
-            if(SUPER_VERBOSE) console.log('rule "%c%s%c" can be integrated into "%c%s%c"', 'color: #ef6c00', stack[i].rule, 'color: black', 'color: #ef6c00', stack[i-1].rule, 'color: black')
+      //   //   if(last(path_from_previous_to_current) === stack[i].rule) {
+      //   //     if(SUPER_VERBOSE) console.log('rule "%c%s%c" can be integrated into "%c%s%c"', 'color: #ef6c00', stack[i].rule, 'color: black', 'color: #ef6c00', stack[i-1].rule, 'color: black')
 
-            stack[i-1].children.push(stack.pop())
-            console.log('stack (shallow copy):', [...stack])
-          }
-        }
+      //   //     stack[i-1].children.push(stack.pop())
+      //   //     console.log('stack (shallow copy):', [...stack])
+      //   //   }
+      //   // }
 
-        // if(SUPER_VERBOSE) console.log('it should be checked if the last rule on the stack is completed. Since the last token did not work together with the current last rule the last rule on the stack should be complete (or there is a syntax error in the input but error discovery is not yet implemented). This means that the last rule can be incorporated into the second to last (if it fits. This could be checked by searching using a "find_path_to_non_terminal" starting from the second to last rule to the last rule)')
+      //   // if(SUPER_VERBOSE) console.log('it should be checked if the last rule on the stack is completed. Since the last token did not work together with the current last rule the last rule on the stack should be complete (or there is a syntax error in the input but error discovery is not yet implemented). This means that the last rule can be incorporated into the second to last (if it fits. This could be checked by searching using a "find_path_to_non_terminal" starting from the second to last rule to the last rule)')
 
-        // if(stack[stack.length-2] !== undefined) {
-        //   const path_from_second_to_last_to_last = Array.from(find_path_to_non_terminal(twice_reduced_rules, stack[stack.length-2].rule, stack[stack.length-1].rule, new Set(), 0))
-        //   if(SUPER_VERBOSE) console.log('does the last rule fit into the second to last?', path_from_second_to_last_to_last)
-        //   if(SUPER_VERBOSE) console.log('if this call returns an array with the last rule on the stack at the end then there exists a path from the second to last rule to the last rule meaning that the second to last rule can be incorporated into  the second to last')
+      //   // if(stack[stack.length-2] !== undefined) {
+      //   //   const path_from_second_to_last_to_last = Array.from(find_path_to_non_terminal(twice_reduced_rules, stack[stack.length-2].rule, stack[stack.length-1].rule, new Set(), 0))
+      //   //   if(SUPER_VERBOSE) console.log('does the last rule fit into the second to last?', path_from_second_to_last_to_last)
+      //   //   if(SUPER_VERBOSE) console.log('if this call returns an array with the last rule on the stack at the end then there exists a path from the second to last rule to the last rule meaning that the second to last rule can be incorporated into  the second to last')
 
-        //   if(last(path_from_second_to_last_to_last) === last(stack).rule) {
-        //     if(SUPER_VERBOSE) console.log('incorporating last rule into second to last rule since it fits')
-        //     stack[stack.length-2].children.push(stack.pop())
-        //     console.log('stack:', [...stack])
-        //   }
-        // }
+      //   //   if(last(path_from_second_to_last_to_last) === last(stack).rule) {
+      //   //     if(SUPER_VERBOSE) console.log('incorporating last rule into second to last rule since it fits')
+      //   //     stack[stack.length-2].children.push(stack.pop())
+      //   //     console.log('stack:', [...stack])
+      //   //   }
+      //   // }
 
-        console.log('now we have to deal with the next_token ("%c%s%c") which could not be assigned to a rule yet', 'color: #ef6c00', next_token, 'color: black')
-        console.log('it should be checked if it can be integrated into the (now) last rule on the stack (note: doing all of this should be done somewhat recursively / iteratively so that the stack can be reduced to it\'s smallest possible state)')
+      //   // console.log('now we have to deal with the next_token ("%c%s%c") which could not be assigned to a rule yet', 'color: #ef6c00', next_token, 'color: black')
+      //   // console.log('it should be checked if it can be integrated into the (now) last rule on the stack (note: doing all of this should be done somewhat recursively / iteratively so that the stack can be reduced to it\'s smallest possible state)')
 
-        i++
+      //   i++
 
-      // incase a rule matches check the precedences
-      // - precedence of matching rule is higher: push to stack
-      // - precedence of matching rule is equal: try to integrate into rule on the stack
-      // - precedence is lower: process `token` alone
-      } else {
-        console.log(
-          'matching rule for token and next_token: "%c%s%c"',
-          'color: #ef6c00', reduced_matching_rule, 'color: black'
-        )
+      // // incase a rule matches check the precedences
+      // // - precedence of matching rule is higher: push to stack
+      // // - precedence of matching rule is equal: try to integrate into rule on the stack
+      // // - precedence is lower: process `token` alone
+      // } else {
+      //   // console.log(
+      //   //   'matching rule for token and next_token: "%c%s%c"',
+      //   //   'color: #ef6c00', reduced_matching_rule, 'color: black'
+      //   // )
 
-        stack.push({
-          rule: reduced_matching_rule,
-          children: [token, next_token]
-        })
+      //   stack.push({
+      //     rule: reduced_matching_rule,
+      //     children: [token, next_token]
+      //   })
   
-        i++;
-      }
+      //   i++;
+      // }
     
     } else {
       console.log('skipped look-ahead since no next_token')
     }
   }
-
   return input
 }
 
