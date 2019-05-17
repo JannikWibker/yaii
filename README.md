@@ -36,10 +36,13 @@ Method:
       - **(3.2.4.1)** is the rule on the `stack` complete?
         - **(3.2.4.1.1)** yes: try to integrate it into the rule before that. Does that work?
           - **(3.2.4.1.1.1)** yes: has the `stack` only one rule left?
-            - **(3.2.4.1.1.1.1)** yes: **parsing complete**
+            - **(3.2.4.1.1.1.1)** yes: are there any more tokens left?
+              - **(3.2.4.1.1.1.1)** yes: lower the precedence of the rule on the `stack` till a rule matches for the current rule on the stack and the `token`. While searching use the rule as `token` and the original `token` as `next_token`, continue to **(3.2.1)**
+              - **(3.2.4.1.1.1.2)** no: **parsing complete**
             - **(3.2.4.1.1.1.2)** no: continue to **(3.2.4.1)**
           - **(3.2.4.1)** no: continue to **(3.2.4.1.2)**
         - **(3.2.4.1.2)** no: continue to **(3.2.1)**
 
-> When either **(3.1)** or **(3.2.4.1.1.1.1)** are reached parsing is complete
+> When either **(3.1)** or **(3.2.4.1.1.1.1)** are reached parsing is complete.
+> 
 > Whenever no matching rule is found but one should exist a syntax error has occured
