@@ -158,6 +158,8 @@ const parser = (input, options) => {
   // return Parser(['id', '(', '(', 'id', '>', '(', 'id', '||', 'id', ')', ')', '&&', 'id', '!=', 'id', ',', '(', 'id', '(', 'id', ':', 'id', ')', '+', 'id', ')', '%', 'id', ',', 'id', '(', 'id', ':', 'id', ')', ')'], options)
   // return Parser(['id', '>', 'id'], options)
   return Parser(['id', '(', 'id', '>', 'id', ',', 'id', ',', 'id', ')'], options)
+  // return Parser(['id', '+', 'id'], options)
+  // return Parser([',', 'id'])
 }
 
 parser()

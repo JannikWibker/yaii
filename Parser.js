@@ -8,7 +8,37 @@ const isNonTerminal = (part) => !part.startsWith('@')
 
 const isMatchingTerminal = (part, terminal) => part === '@' + terminal
 
-const find_path_to_terminal = (rules, current_rule, token, path=new Set(), i=0) => {
+const find_path_to_terminal = (rules, current_rule, token) => {
+  const path = Array.from(_find_path_to_terminal(rules, current_rule, token, new Set(), 0))
+  if(path.length !== 0) {
+
+    // const idk = rules[last(path)].map(rule => rule[0])
+    // console.log('really_has_path?: ', !!idk.filter(sub_rule_part => isMatchingTerminal(sub_rule_part, token))[0]) // this can be optimized greatly... doing that now
+
+    let really_has_path = false
+
+    const last_rule = rules[last(path)] // not recalculating constants
+
+    for(let i = 0; i < last_rule.length; i++) { // looping through all sub_rules of rules[last(path)]; the last item in the path array should be the actual direct match
+      const sub_rule_part = last_rule[i][0] // first item of sub_rule
+      if(isMatchingTerminal(sub_rule_part, token)) { // does this first item of the sub_rule match the terminal?
+        really_has_path = true
+      }
+    }
+
+    if(really_has_path) {
+      return path
+    } else {
+      return []
+    }
+
+  } else {
+    return []
+  }
+}
+
+// if no path to the terminal symbol is found this just returns every rule that it went through to find the terminal even if it did not find it at the end. Solving this using a wrapper function that checks if the terminal was REALLY found?
+const _find_path_to_terminal = (rules, current_rule, token, path=new Set(), i=0) => {
   if(i > 1000) {
     console.log('breaking duo to overflow (limit: 1000)')
     return new Set()
@@ -27,13 +57,18 @@ const find_path_to_terminal = (rules, current_rule, token, path=new Set(), i=0) 
 
   }
 
-  rules_to_follow.forEach(rule => 
-      path.add(...find_path_to_terminal(rules, rule, token, path.add(current_rule), i+1)))
+  rules_to_follow.forEach(rule =>
+    path.add(..._find_path_to_terminal(rules, rule, token, path.add(current_rule), i+1))
+  )
 
   return path
 }
 
-const find_path_to_non_terminal = (rules, current_rule, target_rule, path=new Set(), i=0) => {
+const find_path_to_non_terminal = (rules, current_rule, target_rule) => {
+  return Array.from(_find_path_to_non_terminal(rules, current_rule, target_rule, new Set(), 0))
+}
+
+const _find_path_to_non_terminal = (rules, current_rule, target_rule, path=new Set(), i=0) => {
   if(i > 1000) {
     console.log('breaking duo to overflow (limit: 1000)')
     return new Set()
@@ -53,7 +88,7 @@ const find_path_to_non_terminal = (rules, current_rule, target_rule, path=new Se
   }
 
   rules_to_follow.forEach(rule =>
-    path.add(...find_path_to_non_terminal(rules, rule, target_rule, path.add(current_rule), i+1)))
+    path.add(..._find_path_to_non_terminal(rules, rule, target_rule, path.add(current_rule), i+1)))
 
   return path
 }
@@ -124,9 +159,9 @@ const get_missing_portions = (rules, rule, tokens) => {
     let has_path_to_token
 
     if(typeof token === 'string') {
-      has_path_to_token = !!Array.from(find_path_to_terminal(new_rules, rule, token, new Set(), 0))[0]
+      has_path_to_token = !!find_path_to_terminal(new_rules, rule, token)[0]
     } else if(typeof token === 'object') {
-      has_path_to_token = !!Array.from(find_path_to_non_terminal(new_rules, rule, token.rule, new Set(), 0))[0]
+      has_path_to_token = !!find_path_to_non_terminal(new_rules, rule, token.rule)[0]
     }
 
     if(has_path_to_token) {
@@ -163,7 +198,7 @@ const try_to_reduce_stack = (rules, stack) => {
       // reducing only the current_rule (stack[i-1].rule) since otherwise a path to target_rule (stack[i].rule) cannot be found most of the time
       new_rules[stack[i-1].rule] = reduce_rule(rules[stack[i-1].rule], amount_to_reduce)
 
-      const path_from_previous_to_current = Array.from(find_path_to_non_terminal(new_rules, stack[i-1].rule, stack[i].rule, new Set(), 0))
+      const path_from_previous_to_current = find_path_to_non_terminal(new_rules, stack[i-1].rule, stack[i].rule)
 
       // if(SUPER_VERBOSE) console.log(
       //   'missing_from_previous:', missing_from_previous, '\n',
@@ -200,7 +235,7 @@ const Parser = function(input, options) {
   let stop = false
 
   // main loop through the TokenStream. `stop` is used to break incase of a syntax error
-  while(i+1 < input.length && !stop) {
+  while(i+1 < input.length && !stop) { // this is probably missing the last iteration where only token is defined and not next_token, should this be adjusted or should the last token be done manually since backtracking should always be done on the last token?
 
     token = input[i]
     next_token = input[i+1]
@@ -216,7 +251,7 @@ const Parser = function(input, options) {
     )
 
     // matching rule for current token
-    const matching_rules = Array.from(find_path_to_terminal(rules, current_rule, token, new Set(), 0))
+    const matching_rules = find_path_to_terminal(rules, current_rule, token)
     console.log('matching rule for (only) token', matching_rules)
 
     i++; // incrementing i already, if look-ahead works i is also incremted again there
@@ -243,7 +278,7 @@ const Parser = function(input, options) {
       // here the actual search for a matching rule is done. It should really only match one
       // rule in total, but if more are matched the one with the highest precedence is taken
       for(let i = 0; i < matching_rules.length; i++) {
-        reduced_matching_rule = last(Array.from(find_path_to_terminal(reduced_rules, matching_rules[i], next_token, new Set(), 0))) || reduced_matching_rule
+        reduced_matching_rule = last(find_path_to_terminal(reduced_rules, matching_rules[i], next_token)) || reduced_matching_rule
       }
 
       if(!reduced_matching_rule) console.log(
@@ -341,7 +376,7 @@ const Parser = function(input, options) {
             if(SUPER_VERBOSE) console.log('trying to append to last rule on the stack and then backtrack if possible')
 
             const missing_portions = last(stack).missing
-            const has_path_to_terminal = !!Array.from(find_path_to_terminal(rules, missing_portions[0], token, new Set(), 0))[0]
+            const has_path_to_terminal = !!find_path_to_terminal(rules, missing_portions[0], token)[0]
 
             console.log('still missing from last rule:', missing_portions)
 
@@ -357,12 +392,9 @@ const Parser = function(input, options) {
                 console.log('MAYBE COMPLETED STACK ITEM', stack[stack.length-1])
               }
 
-              console.log('STACK BEFORE REDUCE:', JSON.parse(JSON.stringify(stack)))
-              stack = try_to_reduce_stack(rules, stack)
-              console.log('STACK AFTER REDUCE:', JSON.parse(JSON.stringify(stack)))
-
               // it should probably be tried to reduce the size of the stack as much as possible
-              // stack = try_to_reduce_stack(rules, stack)
+              stack = try_to_reduce_stack(rules, stack)
+              
             } else {
               console.log('no path to terminal was found in the previous rule, this seems like a syntax error')
             }
@@ -410,7 +442,7 @@ const Parser = function(input, options) {
         
       //   const twice_reduced_rules = map_rules_to_references(matching_rules, reduce_rules(get_rules_by_reference(reduced_rules, matching_rules), 1))
 
-      //   const has_path_to_terminal = !!Array.from(find_path_to_terminal(twice_reduced_rules, last(stack).rule, token, new Set(), 0))[0]
+      //   const has_path_to_terminal = !!find_path_to_terminal(twice_reduced_rules, last(stack).rule, token)[0]
 
       //   // console.log('has_path_to_terminal', has_path_to_terminal)
 
@@ -429,7 +461,7 @@ const Parser = function(input, options) {
       //   //   console.log('iterating stack now, trying to integrate rules into each other', stack[i])
       //   //   console.log('does "%c%s%c" (%s) fit into "%c%s%c" (%s)?', 'color: #ef6c00', stack[i].rule, 'color: black', stack[i].children.join(' '), 'color: #ef6c00', stack[i-1].rule, 'color: black', stack[i-1].children.join(' '))
 
-      //   //   const path_from_previous_to_current = Array.from(find_path_to_non_terminal(twice_reduced_rules, stack[i-1].rule, stack[i].rule, new Set(), 0))
+      //   //   const path_from_previous_to_current = find_path_to_non_terminal(twice_reduced_rules, stack[i-1].rule, stack[i].rule)
           
       //   //   if(SUPER_VERBOSE) console.log('this is the path that was found:', path_from_previous_to_current)
       //   //   if(SUPER_VERBOSE) console.log('if the array has "%c%s%c" at the end (%s), then there exists a path meaning that the current rule can be integrated into the previous rule', 'color: #ef6c00', stack[i].rule, 'color: black', last(path_from_previous_to_current) === stack[i].rule ? 'which it does' : 'which it does not')
@@ -445,7 +477,7 @@ const Parser = function(input, options) {
       //   // if(SUPER_VERBOSE) console.log('it should be checked if the last rule on the stack is completed. Since the last token did not work together with the current last rule the last rule on the stack should be complete (or there is a syntax error in the input but error discovery is not yet implemented). This means that the last rule can be incorporated into the second to last (if it fits. This could be checked by searching using a "find_path_to_non_terminal" starting from the second to last rule to the last rule)')
 
       //   // if(stack[stack.length-2] !== undefined) {
-      //   //   const path_from_second_to_last_to_last = Array.from(find_path_to_non_terminal(twice_reduced_rules, stack[stack.length-2].rule, stack[stack.length-1].rule, new Set(), 0))
+      //   //   const path_from_second_to_last_to_last = find_path_to_non_terminal(twice_reduced_rules, stack[stack.length-2].rule, stack[stack.length-1].rule)
       //   //   if(SUPER_VERBOSE) console.log('does the last rule fit into the second to last?', path_from_second_to_last_to_last)
       //   //   if(SUPER_VERBOSE) console.log('if this call returns an array with the last rule on the stack at the end then there exists a path from the second to last rule to the last rule meaning that the second to last rule can be incorporated into  the second to last')
 
@@ -478,6 +510,7 @@ const Parser = function(input, options) {
     } else {
       console.log('skipped look-ahead since no next_token')
     }
+    console.log(stack)
     console.groupEnd()
   }
   return input
