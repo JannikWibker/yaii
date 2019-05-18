@@ -58,10 +58,22 @@ const find_path_to_non_terminal = (rules, current_rule, target_rule, path=new Se
   return path
 }
 
+const copy_rules = (rules) => {
+  const new_rules = []
+  for(let i = 0; i < rules.length; i++) {
+    const new_inner_rules = []
+      for(let k = 0; k < rules[j].length; k++) {
+        new_inner_rules[k] = rules[j][k]
+      }
+      new_rules[j] = new_inner_rules
+  }
+  return new_rules
+}
+
 const reduce_rule = (rule, amount) => {
   const new_inner_rules = []
   for(let i = 0; i < rule.length; i++) {
-    new_inner_rule[i] = rule[i].slice(amount)
+    new_inner_rules[i] = rule[i].slice(amount)
   }
   return new_inner_rules.filter(rule => rule.length > 0)
 }
@@ -98,7 +110,7 @@ const map_rules_to_references = (rule_references, rules) => {
   return new_rules
 }
 
-const reduce_rule_object = (rules, amount) => map_rules_to_references(Object.keys(rules), reduce_rules(Object.values(rules), 1))
+const reduce_rule_object = (rules, amount) => map_rules_to_references(Object.keys(rules), reduce_rules(Object.values(rules), amount))
 
 const get_precedence = (rules, rule) => Object.keys(rules).indexOf(rule)+1 // +1 since indices are zero-based
 
@@ -140,17 +152,25 @@ const try_to_reduce_stack = (rules, stack) => {
       // stack[i] is completed
       if(SUPER_VERBOSE) console.log('rule %s is completed. Now the question is, does it fit into rule %s', stack[i].rule, stack[i-1].rule)
       // theres probably something wrong with this code below, the check does not return that prec_5 fits into prec_1 of prec_10
+      // found the bug: when trying to find_path_to_non_terminal the only rule that should be reduced is the current_rule (stack[i-1].rule) and not the rest
+      // without the rest "unreduced" there is often no path available to the target rule. `reduce_rule` should be used and that should then be somehow merged with the normal `rules`
+      // and after that these new rules should be used for find_path_to_non_terminal.
       const missing_from_previous = get_missing_portions(rules, stack[i-1].rule, stack[i-1].children)
       const amount_to_reduce = stack[i-1].children.length
-      const new_rules = reduce_rule_object(rules, amount_to_reduce)
+
+      // copying rules (reducing by 0, could also use copy_rules and then manually do the conversion between array and object)
+      const new_rules = reduce_rule_object(rules, 0)
+      // reducing only the current_rule (stack[i-1].rule) since otherwise a path to target_rule (stack[i].rule) cannot be found most of the time
+      new_rules[stack[i-1].rule] = reduce_rule(rules[stack[i-1].rule], amount_to_reduce)
+
       const path_from_previous_to_current = Array.from(find_path_to_non_terminal(new_rules, stack[i-1].rule, stack[i].rule, new Set(), 0))
 
-      if(SUPER_VERBOSE) console.log(
-        'missing_from_previous:', missing_from_previous,
-        'amount_to_reduce:', amount_to_reduce,
-        'new_rules:', new_rules,
-        'path_from_previous_to_current:', path_from_previous_to_current
-      )
+      // if(SUPER_VERBOSE) console.log(
+      //   'missing_from_previous:', missing_from_previous, '\n',
+      //   'amount_to_reduce:', amount_to_reduce, '\n',
+      //   'new_rules:', new_rules, '\n',
+      //   'path_from_previous_to_current:', path_from_previous_to_current
+      // )
 
       if(last(path_from_previous_to_current) === stack[i].rule) {
         if(SUPER_VERBOSE) console.log('rule "%c%s%c" can be integrated into "%c%s%c"', 'color: #ef6c00', stack[i].rule, 'color: black', 'color: #ef6c00', stack[i-1].rule, 'color: black')
@@ -184,6 +204,8 @@ const Parser = function(input, options) {
 
     token = input[i]
     next_token = input[i+1]
+
+    console.group(i, token, next_token)
 
     console.log(
       'token:           "%c%s%c"\nnext_token:      "%c%s%c"\nalready parsed:  "%c%s%c"\n\nstack:',
@@ -456,6 +478,7 @@ const Parser = function(input, options) {
     } else {
       console.log('skipped look-ahead since no next_token')
     }
+    console.groupEnd()
   }
   return input
 }
