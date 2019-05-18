@@ -86,7 +86,6 @@ const precedence = {
 
 const rules = {
   prec_1: [
-    ['@id'],
     ['prec_2'],
     ['prec_2', '@,', 'prec_1']
   ],
@@ -124,9 +123,9 @@ const rules = {
   ],
   prec_9: [
     ['prec_10'],
-    // ['@!', 'prec_10'],
-    // ['@+', 'prec_10'],
-    // ['@-', 'prec_10'],
+    ['@!', 'prec_10'],
+    ['@+', 'prec_10'],
+    ['@-', 'prec_10'],
     ['prec_10', '@!']
   ],
   prec_10: [
@@ -135,7 +134,7 @@ const rules = {
   ],
   prec_11: [
     ['id'],
-    // ['@(', 'prec_1', '@)']
+    ['@(', 'prec_1', '@)']
   ],
   id: [
     ['@id']

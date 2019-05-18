@@ -12,9 +12,6 @@ const find_path_to_terminal = (rules, current_rule, token) => {
   const path = Array.from(_find_path_to_terminal(rules, current_rule, token, new Set(), 0))
   if(path.length !== 0) {
 
-    // const idk = rules[last(path)].map(rule => rule[0])
-    // console.log('really_has_path?: ', !!idk.filter(sub_rule_part => isMatchingTerminal(sub_rule_part, token))[0]) // this can be optimized greatly... doing that now
-
     let really_has_path = false
 
     const last_rule = rules[last(path)] // not recalculating constants
@@ -43,6 +40,8 @@ const _find_path_to_terminal = (rules, current_rule, token, path=new Set(), i=0)
     console.log('breaking duo to overflow (limit: 1000)')
     return new Set()
   }
+
+  // console.log(rules, current_rule, token)
 
   const rules_to_follow = new Set()
 
@@ -161,6 +160,9 @@ const get_missing_portions = (rules, rule, tokens) => {
     if(typeof token === 'string') {
       has_path_to_token = !!find_path_to_terminal(new_rules, rule, token)[0]
     } else if(typeof token === 'object') {
+      // get_missing_portions often gets something wrong about the first item of its list of missing things, could this be why?
+      // there was a bug inside find_path_to_terminal, the same bug is probably also inside of find_path_to_non_terminal, should check that
+      // probably not the case, this else if block is not really getting executed since all tokens are of type string (which is weird, some tokens should be other rules)
       has_path_to_token = !!find_path_to_non_terminal(new_rules, rule, token.rule)[0]
     }
 
@@ -176,15 +178,20 @@ const get_missing_portions = (rules, rule, tokens) => {
   return new_rules[rule][0] // at this point only one sub-rule should remain, this is why the first element is taken, if this did not happen an array of arrays would be returned. Incase that nothing exists anymore an empty array is returned
 }
 
-const try_to_reduce_stack = (rules, stack) => {
+const try_to_reduce_stack = (rules, stack, no_manual_missing_check_on_first_item=false) => {
   // iterating from top to bottom+1 since one rule should still remain there. breaking if can't integrate further
+  if(SUPER_VERBOSE) console.group('try_to_reduce_stack')
   for(let i = stack.length-1; i > 0; i--) {
-    if(SUPER_VERBOSE) console.log('try_to_reduce_stack_current_stack_item:', stack[i])
-    if(SUPER_VERBOSE) console.log(get_missing_portions(rules, stack[i].rule, stack[i].children))
+    
+    if(SUPER_VERBOSE) console.log('current_stack_item:', stack[i])
+    if(SUPER_VERBOSE) console.log(get_missing_portions(rules, stack[i].rule, stack[i].children)) // somehow this gives the wrong result, should this be replaced with stack[i].missing?
+    if(SUPER_VERBOSE) console.log(stack[i].missing)
     if(SUPER_VERBOSE) console.log('does "%c%s%c" (%s) fit into "%c%s%c" (%s)?', 'color: #ef6c00', stack[i].rule, 'color: black', stack[i].children.join(' '), 'color: #ef6c00', stack[i-1].rule, 'color: black', stack[i-1].children.join(' '))
     if(SUPER_VERBOSE) console.log('missing portions from rule ' + stack[i].rule, get_missing_portions(rules, stack[i].rule, stack[i].children))
-    if(get_missing_portions(rules, stack[i].rule, stack[i].children).length === 0) {
-      // stack[i] is completed
+    
+    // stack[i] is completed
+    if((no_manual_missing_check_on_first_item && i === stack.length-1 && stack[i].missing.length === 0) || get_missing_portions(rules, stack[i].rule, stack[i].children).length === 0) {
+
       if(SUPER_VERBOSE) console.log('rule %s is completed. Now the question is, does it fit into rule %s', stack[i].rule, stack[i-1].rule)
       // theres probably something wrong with this code below, the check does not return that prec_5 fits into prec_1 of prec_10
       // found the bug: when trying to find_path_to_non_terminal the only rule that should be reduced is the current_rule (stack[i-1].rule) and not the rest
@@ -200,20 +207,25 @@ const try_to_reduce_stack = (rules, stack) => {
 
       const path_from_previous_to_current = find_path_to_non_terminal(new_rules, stack[i-1].rule, stack[i].rule)
 
-      // if(SUPER_VERBOSE) console.log(
-      //   'missing_from_previous:', missing_from_previous, '\n',
-      //   'amount_to_reduce:', amount_to_reduce, '\n',
-      //   'new_rules:', new_rules, '\n',
-      //   'path_from_previous_to_current:', path_from_previous_to_current
-      // )
+      if(SUPER_VERBOSE) console.log(
+        'missing_from_previous:', missing_from_previous, '\n',
+        'amount_to_reduce:', amount_to_reduce, '\n',
+        'new_rules:', new_rules, '\n',
+        'path_from_previous_to_current:', path_from_previous_to_current
+      )
 
       if(last(path_from_previous_to_current) === stack[i].rule) {
         if(SUPER_VERBOSE) console.log('rule "%c%s%c" can be integrated into "%c%s%c"', 'color: #ef6c00', stack[i].rule, 'color: black', 'color: #ef6c00', stack[i-1].rule, 'color: black')
         stack[i-1].children.push(stack.pop())
-        stack[i-1].missing.filter((_, i) => i !== 0) // filter out the first element since this is the one that was just integrated
+        stack[i-1].maybe_not_really_completed = stack[i-1].missing[0]
+        stack[i-1].missing = stack[i-1].missing.filter((_, i) => i !== 0) // filter out the first element since this is the one that was just integrated
+        // is the first rule in missing really complete now? not really i think, but could be set to done since its potentially done.
+        // Can it be checked if a given token can still be integrated into the rule later on? Maybe. 
+        // Saving to 'maybe_not_really_completed' to be able to look it up later (I know that this is probably a really really bad idea)
       }
     }
   }
+  console.groupEnd()
   return stack
 }
 
@@ -384,7 +396,6 @@ const Parser = function(input, options) {
               console.log('path to terminal found, inserting into previous rule')
               stack[stack.length-1].children.push(token) // should this be pushed as a token or a complete rule? also when pushing as a complete rule, what would be the rule used to describe this?, would it be missing_portions[0] or last(matching_rules)
 
-
               console.log(get_precedence(rules, last(matching_rules)), get_precedence(rules, missing_portions[0]))
               // if this token completes a portion of the last rule just remove that portion from the list
               if(get_precedence(rules, last(matching_rules)) >= get_precedence(rules, missing_portions[0])) {
@@ -393,7 +404,24 @@ const Parser = function(input, options) {
               }
 
               // it should probably be tried to reduce the size of the stack as much as possible
-              stack = try_to_reduce_stack(rules, stack)
+              stack = try_to_reduce_stack(rules, stack, true)
+
+              // now we have to deal with the next_token
+              // trying if it can be appended, similar to what has been done with token
+
+              {
+                const missing_portions = last(stack).missing
+                let has_path_to_terminal
+                console.log(missing_portions, stack)
+                if(isTerminal(missing_portions[0])) {
+                  has_path_to_terminal = isMatchingTerminal(missing_portions[0], next_token)
+                } else {
+                  has_path_to_terminal = find_path_to_terminal(rules, missing_portions[0], next_token).length > 0
+                }
+
+                console.log('can next_token be integrated into the last rule (%c%s%c) on the stack? %s', 'color: #ef6c00', last(stack).rule, 'color: back', has_path_to_terminal ? 'yes' : 'no')
+              }
+              
               
             } else {
               console.log('no path to terminal was found in the previous rule, this seems like a syntax error')
@@ -411,10 +439,30 @@ const Parser = function(input, options) {
         // if a terminal is the item in the array of missing portions it's precedence is the
         // precedence of it's own rule, if another rule is referenced the precedence of that rule is taken
         const missing_precedence = get_precedence(rules, isTerminal(missing_portions[0]) ? last(stack).rule : missing_portions[0])
+        const maybe_missing_precedence = get_precedence(rules, isTerminal(last(stack).maybe_not_really_completed) ? last(stack).rule : last(stack).maybe_not_really_completed)
+
+        console.log(last(stack))
 
         const new_precedence = get_precedence(rules, matching_rules[0])
 
-        console.log(missing_portions, missing_precedence, new_precedence)
+        console.log(missing_portions, missing_precedence, maybe_missing_precedence, new_precedence)
+
+        // is precedence really that important here to be honest?
+        if(new_precedence > missing_precedence || new_precedence > maybe_missing_precedence) {
+          console.log('new precedence is higher')
+        } else {
+          console.log('new precedence is lower')
+        }
+
+        // checking if token would fit in somewhere (either last(stack).maybe_not_really_completed or last(stack).missing[0])
+        // i need to do some weird rule reducing here again and check something with last(last(stack).children) and token.
+        // if they match last(stack).maybe_not_really_completed then i know that it's actually not really completed and i can append
+        // the token to the children and add whats missing from the maybe_not_really_completed rule to the beginning of last(stack).missing
+        // incase of prec_1 this would mean that maybe_not_really_completed would no longer hold a value and prec_1 would just go into missing again
+
+
+        // also consider:
+        // last(stack).maybe_not_really_completed should also be checked
 
         // compare the precedences (new_precedence vs missing_precedence)
         // - higher: integrate into rule on the stack
@@ -501,7 +549,7 @@ const Parser = function(input, options) {
 
       //   stack.push({
       //     rule: reduced_matching_rule,
-      //     children: [token, next_token]
+      //     children: [token, next_token],
       //   })
   
       //   i++;
