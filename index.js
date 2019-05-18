@@ -154,10 +154,10 @@ const Parser = _Parser({
 
 const parser = (input, options) => {
   // return Parser(TokenStream(InputStream(input, options), options), options)
-  return Parser(['id', '(', 'id', '>', 'id', '+', 'id', ')'], options)
+  // return Parser(['id', '(', 'id', '>', 'id', '+', 'id', ')'], options)
   // return Parser(['id', '(', '(', 'id', '>', '(', 'id', '||', 'id', ')', ')', '&&', 'id', '!=', 'id', ',', '(', 'id', '(', 'id', ':', 'id', ')', '+', 'id', ')', '%', 'id', ',', 'id', '(', 'id', ':', 'id', ')', ')'], options)
   // return Parser(['id', '>', 'id'], options)
-  // return Parser(["id", "(", "id", ">", "id", ",", "id", ",", "id", ")"], options)
+  return Parser(['id', '(', 'id', '>', 'id', ',', 'id', ',', 'id', ')'], options)
 }
 
 parser()

@@ -131,12 +131,15 @@ const get_missing_portions = (rules, rule, tokens) => {
 
 const try_to_reduce_stack = (rules, stack) => {
   // iterating from top to bottom+1 since one rule should still remain there. breaking if can't integrate further
-  for(let i = stack.length-1; i > 1; i--) {
+  for(let i = stack.length-1; i > 0; i--) {
     if(SUPER_VERBOSE) console.log('try_to_reduce_stack_current_stack_item:', stack[i])
     if(SUPER_VERBOSE) console.log(get_missing_portions(rules, stack[i].rule, stack[i].children))
     if(SUPER_VERBOSE) console.log('does "%c%s%c" (%s) fit into "%c%s%c" (%s)?', 'color: #ef6c00', stack[i].rule, 'color: black', stack[i].children.join(' '), 'color: #ef6c00', stack[i-1].rule, 'color: black', stack[i-1].children.join(' '))
+    if(SUPER_VERBOSE) console.log('missing portions from rule ' + stack[i].rule, get_missing_portions(rules, stack[i].rule, stack[i].children))
     if(get_missing_portions(rules, stack[i].rule, stack[i].children).length === 0) {
       // stack[i] is completed
+      if(SUPER_VERBOSE) console.log('rule %s is completed. Now the question is, does it fit into rule %s', stack[i].rule, stack[i-1].rule)
+      // theres probably something wrong with this code below, the check does not return that prec_5 fits into prec_1 of prec_10
       const missing_from_previous = get_missing_portions(rules, stack[i-1].rule, stack[i-1].children)
       const amount_to_reduce = stack[i-1].children.length
       const new_rules = reduce_rule_object(rules, amount_to_reduce)
@@ -156,13 +159,14 @@ const try_to_reduce_stack = (rules, stack) => {
       }
     }
   }
+  return stack
 }
 
 const Parser = function(input, options) {
 
   const {ast, rules} = this
 
-  const stack = []
+  let stack = []
 
   let i = 0;
   let token
@@ -182,9 +186,9 @@ const Parser = function(input, options) {
     next_token = input[i+1]
 
     console.log(
-      'token:           "%c%s%c"\nnext_token:      "%c%s%c"\nalready parsed:  "%c%s%c"\n\nstack:', 
-      'color: #ef6c00', token, 'color: black', 
-      'color: #ef6c00', next_token, 'color: black', 
+      'token:           "%c%s%c"\nnext_token:      "%c%s%c"\nalready parsed:  "%c%s%c"\n\nstack:',
+      'color: #ef6c00', token, 'color: black',
+      'color: #ef6c00', next_token, 'color: black',
       'color: #ef6c00', input.slice(0, i).join(''), 'color: black',
       [...stack]
     )
@@ -220,9 +224,13 @@ const Parser = function(input, options) {
         reduced_matching_rule = last(Array.from(find_path_to_terminal(reduced_rules, matching_rules[i], next_token, new Set(), 0))) || reduced_matching_rule
       }
 
-      console.log('reduced_matching_rule', reduced_matching_rule)
-
-      if(!reduced_matching_rule) console.log(token, next_token)
+      if(!reduced_matching_rule) console.log(
+          'couldn\'t find rule (reduced_matching_rule) for both token ("%c%s%c") and next_token ("%c%s%c"): "%c%s%c"', 
+          'color: #ef6c00', token, 'color: black', 
+          'color: #ef6c00', next_token, 'color: black', 
+          'color: #ef6c00', reduced_matching_rule, 'color: black'
+        )
+      else console.log('found rule (reduced_matching_rule for both token and next_token: "%c%s%c"', 'color: #ef6c00', reduced_matching_rule, 'color: black')
 
       // incase a rule matches check the precedences (missing on the stack vs. current rule)
       // - precedence of matching rule is higher: push to stack
@@ -250,6 +258,7 @@ const Parser = function(input, options) {
 
           // if a terminal is the item in the array of missing portions it's precedence is the
           // precedence of it's own rule, if another rule is referenced the precedence of that rule is taken
+          console.log(missing_portions)
           const missing_precedence = get_precedence(rules, isTerminal(missing_portions[0]) ? last(stack).rule : missing_portions[0])
           const new_precedence = get_precedence(rules, reduced_matching_rule)
           const relation = new_precedence > missing_precedence ? 1 : new_precedence < missing_precedence ? -1 : 0
@@ -284,7 +293,7 @@ const Parser = function(input, options) {
 
             i++
             // should now try to reduce stack
-            try_to_reduce_stack(rules, stack)
+            stack = try_to_reduce_stack(rules, stack)
           } else if(relation === -1) { // do the backtracking and stuff
             // here we have to check if only token would match anything. We already
             // have the list of things that token matches (`matching_rules`) so we just
@@ -293,9 +302,48 @@ const Parser = function(input, options) {
             // that taken care of by something else? tbh idk
             // NOTE: when will i be incremented?
 
+            // EXAMPLE of when this can happen:
+            // id(id > id, id, id)
+            //         ^ ^
+            //  token        :  id
+            //  next_token   :  ,
+            //  matching_rule:  prec_1
+            //  missing      :  prec_6, prec_1
+            //  action:      :  complete prec_6 with id, then use resulting prec_5 and insert into prec_10
+            //  action       :  look if , matches the missing portions of prec_10 (it does)
+            //  action       :  insert , into prec_10, check if complete (it's not), if yes: backtrack further, if not continue parsing
+
+
             if(SUPER_VERBOSE) console.log('the tokens "%c%s%c" and "%c%s%c" did not produce a match. Trying only "%c%s%c" now.', 'color: #ef6c00', token, 'color: black', 'color: #ef6c00', next_token, 'color: black', 'color: #ef6c00', token, 'color: black')
             if(SUPER_VERBOSE) console.log('highest matching rule for "%c%s%c" is: "%c%s%c"', 'color: #ef6c00', token, 'color: black', 'color: #ef6c00', last(matching_rules), 'color: black')
-            if(SUPER_VERBOSE) console.log('trying to append to last rule on the stack')
+            if(SUPER_VERBOSE) console.log('trying to append to last rule on the stack and then backtrack if possible')
+
+            const missing_portions = last(stack).missing
+            const has_path_to_terminal = !!Array.from(find_path_to_terminal(rules, missing_portions[0], token, new Set(), 0))[0]
+
+            console.log('still missing from last rule:', missing_portions)
+
+            if(has_path_to_terminal) {
+              console.log('path to terminal found, inserting into previous rule')
+              stack[stack.length-1].children.push(token) // should this be pushed as a token or a complete rule? also when pushing as a complete rule, what would be the rule used to describe this?, would it be missing_portions[0] or last(matching_rules)
+
+
+              console.log(get_precedence(rules, last(matching_rules)), get_precedence(rules, missing_portions[0]))
+              // if this token completes a portion of the last rule just remove that portion from the list
+              if(get_precedence(rules, last(matching_rules)) >= get_precedence(rules, missing_portions[0])) {
+                stack[stack.length-1].missing = stack[stack.length-1].missing.filter((missing_rule, i) => i !== 0)
+                console.log('MAYBE COMPLETED STACK ITEM', stack[stack.length-1])
+              }
+
+              console.log('STACK BEFORE REDUCE:', JSON.parse(JSON.stringify(stack)))
+              stack = try_to_reduce_stack(rules, stack)
+              console.log('STACK AFTER REDUCE:', JSON.parse(JSON.stringify(stack)))
+
+              // it should probably be tried to reduce the size of the stack as much as possible
+              // stack = try_to_reduce_stack(rules, stack)
+            } else {
+              console.log('no path to terminal was found in the previous rule, this seems like a syntax error')
+            }
           }
         }
       } else {
@@ -303,7 +351,7 @@ const Parser = function(input, options) {
         console.log(stack)
         if(SUPER_VERBOSE) console.log('the tokens "%c%s%c" and "%c%s%c" did not produce a match. Trying only "%c%s%c" now.', 'color: #ef6c00', token, 'color: black', 'color: #ef6c00', next_token, 'color: black', 'color: #ef6c00', token, 'color: black')
         if(SUPER_VERBOSE) console.log('highest matching rule for "%c%s%c" is: "%c%s%c"', 'color: #ef6c00', token, 'color: black', 'color: #ef6c00', last(matching_rules), 'color: black')
-        if(SUPER_VERBOSE) console.log('trying to append to last rule on the stack')
+        if(SUPER_VERBOSE) console.log('trying to append to last rule on the stack and then backtrack if possible')
 
         const missing_portions = last(stack).missing
         // if a terminal is the item in the array of missing portions it's precedence is the
@@ -352,7 +400,7 @@ const Parser = function(input, options) {
 
       //   // here is probably the point where we should start iterating the stack from top to bottom and try to integrate stuff into the rule before the current. 
 
-      //   try_to_reduce_stack(rules, stack)
+      //   stack = try_to_reduce_stack(rules, stack)
 
       //   // for(let i = stack.length-1; i > 1; i--) { // iterating from top to bottom+1 since one rule should still remain there. breaking if cant integrate further
       //   //   // stack[i] // current stack item
@@ -391,10 +439,6 @@ const Parser = function(input, options) {
 
       //   i++
 
-      // // incase a rule matches check the precedences
-      // // - precedence of matching rule is higher: push to stack
-      // // - precedence of matching rule is equal: try to integrate into rule on the stack
-      // // - precedence is lower: process `token` alone
       // } else {
       //   // console.log(
       //   //   'matching rule for token and next_token: "%c%s%c"',
