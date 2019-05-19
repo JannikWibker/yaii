@@ -2,7 +2,7 @@
 const SUPER_VERBOSE = true
 const last = (arr) => arr[arr.length-1]
 
-const isTerminal = (part) => part.startsWith('@')
+const isTerminal = (part) => typeof part === 'string' && part.startsWith('@')
 
 const isNonTerminal = (part) => !part.startsWith('@')
 
@@ -435,17 +435,19 @@ const Parser = function(input, options) {
         if(SUPER_VERBOSE) console.log('highest matching rule for "%c%s%c" is: "%c%s%c"', 'color: #ef6c00', token, 'color: black', 'color: #ef6c00', last(matching_rules), 'color: black')
         if(SUPER_VERBOSE) console.log('trying to append to last rule on the stack and then backtrack if possible')
 
-        const missing_portions = last(stack).missing
+        const stack_last = last(stack)
+
+        const missing_portions = stack_last.missing
         // if a terminal is the item in the array of missing portions it's precedence is the
         // precedence of it's own rule, if another rule is referenced the precedence of that rule is taken
-        const missing_precedence = get_precedence(rules, isTerminal(missing_portions[0]) ? last(stack).rule : missing_portions[0])
-        const maybe_missing_precedence = get_precedence(rules, isTerminal(last(stack).maybe_not_really_completed) ? last(stack).rule : last(stack).maybe_not_really_completed)
+        const missing_precedence = get_precedence(rules, isTerminal(missing_portions[0]) ? stack_last.rule : missing_portions[0])
+        const maybe_missing_precedence = get_precedence(rules, isTerminal(stack_last.maybe_not_really_completed) ? stack_last.rule : stack_last.maybe_not_really_completed)
 
-        console.log(last(stack))
+        console.log(stack_last)
 
         const new_precedence = get_precedence(rules, matching_rules[0])
 
-        console.log(missing_portions, missing_precedence, maybe_missing_precedence, new_precedence)
+        console.log(missing_portions, stack_last.maybe_not_really_completed, token, missing_precedence, maybe_missing_precedence, new_precedence)
 
         // is precedence really that important here to be honest?
         if(new_precedence > missing_precedence || new_precedence > maybe_missing_precedence) {
@@ -460,6 +462,148 @@ const Parser = function(input, options) {
         // the token to the children and add whats missing from the maybe_not_really_completed rule to the beginning of last(stack).missing
         // incase of prec_1 this would mean that maybe_not_really_completed would no longer hold a value and prec_1 would just go into missing again
 
+        let fits_in_maybe_not_really_completed = false
+        let start_of_maybe_not_really_completed
+
+        let fits_in_missing = false
+        let start_of_missing
+
+        for(let i = stack_last.children.length-1; i > 0; i--) {
+          const current_child = stack_last.children[i]
+          // this assumes that there is always a fallthrough to higher precedence rules
+          // we will check the rule stack_last.maybe_not_really_completed
+          // we can assume that maybe_not_really_completed is a rule reference instead of a terminal
+          // but just to be sure we check it
+          if(!isTerminal(stack_last.maybe_not_really_completed)) {
+            // checking wether or not current_child is a terminal or not
+            let path_to_ith_child = false
+            if(isTerminal(current_child)) {
+              path_to_ith_child = find_path_to_terminal(rules, stack_last.maybe_not_really_completed, current_child).length > 0
+            } else {
+              path_to_ith_child = find_path_to_non_terminal(rules, stack_last.maybe_not_really_completed, current_child.rule).length > 0 
+            }
+            console.log(path_to_ith_child)
+
+
+            if(path_to_ith_child) {
+              // found a path from the nth child to maybe_not_really_completed, now testing what happens if all the children inbetween are also there
+              console.log('children in between')
+              let iteration_rules = rules
+              for(let j = i+1; j < stack_last.children.length; j++) {
+                console.log(stack_last.children[j])
+                // need to reduce the rules by 1 now each iteration
+                iteration_rules = reduce_rule_object(iteration_rules, 1)
+                console.log(iteration_rules)
+                // now need to check if stack_last.children[j] matches
+                let path_to_jth_child = false
+                if(isTerminal(stack_last.children[j])) {
+                  path_to_jth_child = find_path_to_terminal(iteration_rules, stack_last.maybe_not_really_completed, stack_last.children[j]).length > 0
+                } else {
+                  path_to_jth_child = find_path_to_non_terminal(iteration_rules, stack_last.maybe_not_really_completed, stack_last.children[j]).length > 0
+                }
+                if(!path_to_jth_child) {
+                  console.log('cannot track further forward')
+                  break
+                }
+              }
+              start_of_maybe_not_really_completed = i
+              // found a path, no longer need to check the children further back
+              break
+            }
+
+          } else {
+            console.log('something must have went wrong, received a terminal as last(stack).maybe_not_really_completed')
+          }
+        }
+
+        // now need to check wether or not token fits into maybe_not_really_completed
+
+        const amount_to_reduce_rules_by = stack_last.children.length - start_of_maybe_not_really_completed
+        console.log(fits_in_maybe_not_really_completed, start_of_maybe_not_really_completed)
+        console.log('amount to reduce rules:', amount_to_reduce_rules_by)
+
+        const maybe_not_really_completed_rules = reduce_rule_object(rules, amount_to_reduce_rules_by)
+
+        console.log(maybe_not_really_completed_rules)
+
+        // now we have to check token against those new rules
+        fits_in_maybe_not_really_completed = find_path_to_terminal(maybe_not_really_completed_rules, stack_last.maybe_not_really_completed, token).length > 0
+
+        if(!fits_in_maybe_not_really_completed) {
+
+          for(let i = stack_last.children.length-1; i > 0; i--) {
+            const current_child = stack_last.children[i]
+            // this assumes that there is always a fallthrough to higher precedence rules
+            // we will check the rule stack_last.missing[0]
+            if(!isTerminal(stack_last.missing[0])) {
+              // checking wether or not current_child is a terminal or not
+            let path_to_ith_child = false
+            if(isTerminal(current_child)) {
+              path_to_ith_child = find_path_to_terminal(rules, stack_last.missing[0], current_child).length > 0
+            } else {
+              path_to_ith_child = find_path_to_non_terminal(rules, stack_last.missing[0], current_child.rule).length > 0
+            }
+            console.log(path_to_ith_child)
+
+            if(path_to_ith_child) {
+              // found a path from the nth child to missing[0], now testing what happens if all the children inbetween are also there
+              console.log('children in between')
+              let iteration_rules = rules
+              for(let j = i+1; j < stack_last.children.length; j++) {
+                console.log(stack_last.children[j])
+                // need to reduce the rules by 1 now each iteration
+                iteration_rules = reduce_rule_object(iteration_rules, 1)
+                console.log(iteration_rules)
+                // now need to check if stack_last.children[j] matches
+                let path_to_jth_child = false
+                if(isTerminal(stack_last.children[j])) {
+                  path_to_jth_child = find_path_to_terminal(iteration_rules, stack_last.missing[0], stack_last.children[j]).length > 0
+                } else {
+                  path_to_jth_child = find_path_to_non_terminal(iteration_rules, stack_last.missing[0], stack_last.children[j]).length > 0
+                }
+                if(!path_to_jth_child) {
+                  console.log('cannot track further forward')
+                  break
+                }
+              }
+              start_of_missing = i
+              // found a path, no longer need to check the children further back
+              break
+            }
+
+
+            } else {
+              // is this really an error here? I don't think so
+              console.log('something must have went wrong, received a terminal as last(stack).missing[0]')
+            }
+          }
+
+          const amount_to_reduce_rules_by = stack_last.children.length - start_of_maybe_not_really_completed
+          console.log(fits_in_missing, start_of_missing)
+          console.log('amount to reduce rules:', amount_to_reduce_rules_by)
+
+          const missing_rules = reduce_rule_object(rules, amount_to_reduce_rules_by)
+
+          fits_in_missing = find_path_to_terminal(missing_rules, stack.missing[0], token).length > 0
+        }
+
+        if(fits_in_maybe_not_really_completed) {
+          console.log('fits_in_maybe_not_really_completed')
+        } else if(fits_in_missing) {
+          console.log('fits_in_missing')
+        } else {
+          console.log('this is probably a syntax error, did not fit inside maybe_not_really_completed and missing[0]')
+        }
+
+        // this is wrong, i need to find out where last(stack).maybe_not_really_completed begins in last(stack).rule and then have to do the check with that
+        // Incase of prec_10 being on the stack and maybe_not_really_completed being prec_1 this would mean that prec_1 starts after "id(". Meaning that the
+        // check has to be done for all items after that (so reduce by 2 because the items that came before are 2 (does that really work, is reducing right here?))
+        console.log(
+          'I now need to check wether %s is actually not completed by checking if %s and %s match it, after that do the same for the first item of missing (%s)', 
+          last(stack).maybe_not_really_completed, last(stack).children.map(part => typeof part === 'string' ? part : part.rule).join(''), token, last(stack).missing[0]
+        )
+
+        debugger
 
         // also consider:
         // last(stack).maybe_not_really_completed should also be checked
@@ -478,82 +622,6 @@ const Parser = function(input, options) {
         // what happens here?
         // only token should be parsed and it should be attempted to integrate it into the rule on the stack, that is what should happen
       }
-
-      // the following code is slowly getting migrated into the above, this code will be gone soon (hopefully).
-
-      // incase no rule matches both token and next_token:
-      // if(!reduced_matching_rule) {
-
-      //   // if(SUPER_VERBOSE) console.log('the tokens "%c%s%c" and "%c%s%c" did not produce a match. Trying only "%c%s%c" now.', 'color: #ef6c00', token, 'color: black', 'color: #ef6c00', next_token, 'color: black', 'color: #ef6c00', token, 'color: black')
-      //   // if(SUPER_VERBOSE) console.log('highest matching rule for "%c%s%c" is: "%c%s%c"', 'color: #ef6c00', token, 'color: black', 'color: #ef6c00', matching_rules.reverse()[0], 'color: black')
-      //   // if(SUPER_VERBOSE) console.log('trying to append to last rule on the stack')
-        
-      //   const twice_reduced_rules = map_rules_to_references(matching_rules, reduce_rules(get_rules_by_reference(reduced_rules, matching_rules), 1))
-
-      //   const has_path_to_terminal = !!find_path_to_terminal(twice_reduced_rules, last(stack).rule, token)[0]
-
-      //   // console.log('has_path_to_terminal', has_path_to_terminal)
-
-      //   if(SUPER_VERBOSE) console.log('if the previous call returned an array (%s) we now know that the rule has a path to the terminal symbol we are checking. This means we can insert the terminal into the rule on the stack', has_path_to_terminal ? 'id did' : 'id did not')
-
-      //   stack[stack.length-1].children.push(token)
-
-      //   // console.log('stack (shallow copy):', [...stack])
-
-      //   // here is probably the point where we should start iterating the stack from top to bottom and try to integrate stuff into the rule before the current. 
-
-      //   stack = try_to_reduce_stack(rules, stack)
-
-      //   // for(let i = stack.length-1; i > 1; i--) { // iterating from top to bottom+1 since one rule should still remain there. breaking if cant integrate further
-      //   //   // stack[i] // current stack item
-      //   //   console.log('iterating stack now, trying to integrate rules into each other', stack[i])
-      //   //   console.log('does "%c%s%c" (%s) fit into "%c%s%c" (%s)?', 'color: #ef6c00', stack[i].rule, 'color: black', stack[i].children.join(' '), 'color: #ef6c00', stack[i-1].rule, 'color: black', stack[i-1].children.join(' '))
-
-      //   //   const path_from_previous_to_current = find_path_to_non_terminal(twice_reduced_rules, stack[i-1].rule, stack[i].rule)
-          
-      //   //   if(SUPER_VERBOSE) console.log('this is the path that was found:', path_from_previous_to_current)
-      //   //   if(SUPER_VERBOSE) console.log('if the array has "%c%s%c" at the end (%s), then there exists a path meaning that the current rule can be integrated into the previous rule', 'color: #ef6c00', stack[i].rule, 'color: black', last(path_from_previous_to_current) === stack[i].rule ? 'which it does' : 'which it does not')
-
-      //   //   if(last(path_from_previous_to_current) === stack[i].rule) {
-      //   //     if(SUPER_VERBOSE) console.log('rule "%c%s%c" can be integrated into "%c%s%c"', 'color: #ef6c00', stack[i].rule, 'color: black', 'color: #ef6c00', stack[i-1].rule, 'color: black')
-
-      //   //     stack[i-1].children.push(stack.pop())
-      //   //     console.log('stack (shallow copy):', [...stack])
-      //   //   }
-      //   // }
-
-      //   // if(SUPER_VERBOSE) console.log('it should be checked if the last rule on the stack is completed. Since the last token did not work together with the current last rule the last rule on the stack should be complete (or there is a syntax error in the input but error discovery is not yet implemented). This means that the last rule can be incorporated into the second to last (if it fits. This could be checked by searching using a "find_path_to_non_terminal" starting from the second to last rule to the last rule)')
-
-      //   // if(stack[stack.length-2] !== undefined) {
-      //   //   const path_from_second_to_last_to_last = find_path_to_non_terminal(twice_reduced_rules, stack[stack.length-2].rule, stack[stack.length-1].rule)
-      //   //   if(SUPER_VERBOSE) console.log('does the last rule fit into the second to last?', path_from_second_to_last_to_last)
-      //   //   if(SUPER_VERBOSE) console.log('if this call returns an array with the last rule on the stack at the end then there exists a path from the second to last rule to the last rule meaning that the second to last rule can be incorporated into  the second to last')
-
-      //   //   if(last(path_from_second_to_last_to_last) === last(stack).rule) {
-      //   //     if(SUPER_VERBOSE) console.log('incorporating last rule into second to last rule since it fits')
-      //   //     stack[stack.length-2].children.push(stack.pop())
-      //   //     console.log('stack:', [...stack])
-      //   //   }
-      //   // }
-
-      //   // console.log('now we have to deal with the next_token ("%c%s%c") which could not be assigned to a rule yet', 'color: #ef6c00', next_token, 'color: black')
-      //   // console.log('it should be checked if it can be integrated into the (now) last rule on the stack (note: doing all of this should be done somewhat recursively / iteratively so that the stack can be reduced to it\'s smallest possible state)')
-
-      //   i++
-
-      // } else {
-      //   // console.log(
-      //   //   'matching rule for token and next_token: "%c%s%c"',
-      //   //   'color: #ef6c00', reduced_matching_rule, 'color: black'
-      //   // )
-
-      //   stack.push({
-      //     rule: reduced_matching_rule,
-      //     children: [token, next_token],
-      //   })
-  
-      //   i++;
-      // }
     
     } else {
       console.log('skipped look-ahead since no next_token')

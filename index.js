@@ -84,6 +84,18 @@ const precedence = {
   [_too.left_parenthesis]: 11, [_too.right_parenthesis]: 11
 }
 
+/*
+const rules = {
+  rule_1: [
+    sub_rule_1,
+    ['rule_2_reference', '@terminal']
+  ],
+  rule_2: [
+    ...
+  ]
+}
+*/
+
 const rules = {
   prec_1: [
     ['prec_2'],
