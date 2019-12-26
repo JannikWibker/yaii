@@ -186,7 +186,7 @@ const try_to_reduce_stack = (rules, stack, no_manual_missing_check_on_first_item
     if(SUPER_VERBOSE) console.log('current_stack_item:', stack[i])
     if(SUPER_VERBOSE) console.log(get_missing_portions(rules, stack[i].rule, stack[i].children)) // somehow this gives the wrong result, should this be replaced with stack[i].missing?
     if(SUPER_VERBOSE) console.log(stack[i].missing)
-    if(SUPER_VERBOSE) console.log('does "%c%s%c" (%s) fit into "%c%s%c" (%s)?', 'color: #ef6c00', stack[i].rule, 'color: black', stack[i].children.join(' '), 'color: #ef6c00', stack[i-1].rule, 'color: black', stack[i-1].children.join(' '))
+    if(SUPER_VERBOSE) console.log('does "%c%s%c" (%s) fit into "%c%s%c" (%s)?', 'color: #ef6c00', stack[i].rule, 'color: white', stack[i].children.join(' '), 'color: #ef6c00', stack[i-1].rule, 'color: white', stack[i-1].children.join(' '))
     if(SUPER_VERBOSE) console.log('missing portions from rule ' + stack[i].rule, get_missing_portions(rules, stack[i].rule, stack[i].children))
     
     // stack[i] is completed
@@ -215,7 +215,7 @@ const try_to_reduce_stack = (rules, stack, no_manual_missing_check_on_first_item
       )
 
       if(last(path_from_previous_to_current) === stack[i].rule) {
-        if(SUPER_VERBOSE) console.log('rule "%c%s%c" can be integrated into "%c%s%c"', 'color: #ef6c00', stack[i].rule, 'color: black', 'color: #ef6c00', stack[i-1].rule, 'color: black')
+        if(SUPER_VERBOSE) console.log('rule "%c%s%c" can be integrated into "%c%s%c"', 'color: #ef6c00', stack[i].rule, 'color: white', 'color: #ef6c00', stack[i-1].rule, 'color: white')
         stack[i-1].children.push(stack.pop())
         stack[i-1].maybe_not_really_completed = stack[i-1].missing[0]
         stack[i-1].missing = stack[i-1].missing.filter((_, i) => i !== 0) // filter out the first element since this is the one that was just integrated
@@ -256,9 +256,9 @@ const Parser = function(input, options) {
 
     console.log(
       'token:           "%c%s%c"\nnext_token:      "%c%s%c"\nalready parsed:  "%c%s%c"\n\nstack:',
-      'color: #ef6c00', token, 'color: black',
-      'color: #ef6c00', next_token, 'color: black',
-      'color: #ef6c00', input.slice(0, i).join(''), 'color: black',
+      'color: #ef6c00', token, 'color: white',
+      'color: #ef6c00', next_token, 'color: white',
+      'color: #ef6c00', input.slice(0, i).join(''), 'color: white',
       [...stack]
     )
 
@@ -295,11 +295,11 @@ const Parser = function(input, options) {
 
       if(!reduced_matching_rule) console.log(
           'couldn\'t find rule (reduced_matching_rule) for both token ("%c%s%c") and next_token ("%c%s%c"): "%c%s%c"', 
-          'color: #ef6c00', token, 'color: black', 
-          'color: #ef6c00', next_token, 'color: black', 
-          'color: #ef6c00', reduced_matching_rule, 'color: black'
+          'color: #ef6c00', token, 'color: white', 
+          'color: #ef6c00', next_token, 'color: white', 
+          'color: #ef6c00', reduced_matching_rule, 'color: white'
         )
-      else console.log('found rule (reduced_matching_rule for both token and next_token: "%c%s%c"', 'color: #ef6c00', reduced_matching_rule, 'color: black')
+      else console.log('found rule (reduced_matching_rule for both token and next_token: "%c%s%c"', 'color: #ef6c00', reduced_matching_rule, 'color: white')
 
       // incase a rule matches check the precedences (missing on the stack vs. current rule)
       // - precedence of matching rule is higher: push to stack
@@ -332,12 +332,12 @@ const Parser = function(input, options) {
           const new_precedence = get_precedence(rules, reduced_matching_rule)
           const relation = new_precedence > missing_precedence ? 1 : new_precedence < missing_precedence ? -1 : 0
 
-          console.log('still missing from rule "%c%s%c":', 'color: #ef6c00', last(stack).rule, 'color: black', missing_portions)
+          console.log('still missing from rule "%c%s%c":', 'color: #ef6c00', last(stack).rule, 'color: white', missing_portions)
           console.log({...last(stack)})
           console.log(
             'precedences: missing from stack: %c%s%c\n             matched rule (new): %c%s%c\n\ncomparing precedences: (new) %d %s %d (missing from stack) -> %c%s%c',
-            'color: #ef6c00', missing_precedence, 'color: black',
-            'color: #ef6c00', new_precedence, 'color: black',
+            'color: #ef6c00', missing_precedence, 'color: white',
+            'color: #ef6c00', new_precedence, 'color: white',
             new_precedence,
             relation === 1 ? '>' : relation === 0 ? '=' : '<',
             missing_precedence,
@@ -383,8 +383,8 @@ const Parser = function(input, options) {
             //  action       :  insert , into prec_10, check if complete (it's not), if yes: backtrack further, if not continue parsing
 
 
-            if(SUPER_VERBOSE) console.log('the tokens "%c%s%c" and "%c%s%c" did not produce a match. Trying only "%c%s%c" now.', 'color: #ef6c00', token, 'color: black', 'color: #ef6c00', next_token, 'color: black', 'color: #ef6c00', token, 'color: black')
-            if(SUPER_VERBOSE) console.log('highest matching rule for "%c%s%c" is: "%c%s%c"', 'color: #ef6c00', token, 'color: black', 'color: #ef6c00', last(matching_rules), 'color: black')
+            if(SUPER_VERBOSE) console.log('the tokens "%c%s%c" and "%c%s%c" did not produce a match. Trying only "%c%s%c" now.', 'color: #ef6c00', token, 'color: white', 'color: #ef6c00', next_token, 'color: white', 'color: #ef6c00', token, 'color: white')
+            if(SUPER_VERBOSE) console.log('highest matching rule for "%c%s%c" is: "%c%s%c"', 'color: #ef6c00', token, 'color: white', 'color: #ef6c00', last(matching_rules), 'color: white')
             if(SUPER_VERBOSE) console.log('trying to append to last rule on the stack and then backtrack if possible')
 
             const missing_portions = last(stack).missing
@@ -419,7 +419,7 @@ const Parser = function(input, options) {
                   has_path_to_terminal = find_path_to_terminal(rules, missing_portions[0], next_token).length > 0
                 }
 
-                console.log('can next_token be integrated into the last rule (%c%s%c) on the stack? %s', 'color: #ef6c00', last(stack).rule, 'color: back', has_path_to_terminal ? 'yes' : 'no')
+                console.log('can next_token be integrated into the last rule (%c%s%c) on the stack? %s', 'color: #ef6c00', last(stack).rule, 'color: white', has_path_to_terminal ? 'yes' : 'no')
               }
               
               
@@ -431,8 +431,8 @@ const Parser = function(input, options) {
       } else {
         console.log('hello there', token, next_token, i, input.length)
         console.log(stack)
-        if(SUPER_VERBOSE) console.log('the tokens "%c%s%c" and "%c%s%c" did not produce a match. Trying only "%c%s%c" now.', 'color: #ef6c00', token, 'color: black', 'color: #ef6c00', next_token, 'color: black', 'color: #ef6c00', token, 'color: black')
-        if(SUPER_VERBOSE) console.log('highest matching rule for "%c%s%c" is: "%c%s%c"', 'color: #ef6c00', token, 'color: black', 'color: #ef6c00', last(matching_rules), 'color: black')
+        if(SUPER_VERBOSE) console.log('the tokens "%c%s%c" and "%c%s%c" did not produce a match. Trying only "%c%s%c" now.', 'color: #ef6c00', token, 'color: white', 'color: #ef6c00', next_token, 'color: white', 'color: #ef6c00', token, 'color: white')
+        if(SUPER_VERBOSE) console.log('highest matching rule for "%c%s%c" is: "%c%s%c"', 'color: #ef6c00', token, 'color: white', 'color: #ef6c00', last(matching_rules), 'color: white')
         if(SUPER_VERBOSE) console.log('trying to append to last rule on the stack and then backtrack if possible')
 
         const stack_last = last(stack)
@@ -584,9 +584,10 @@ const Parser = function(input, options) {
 
           const missing_rules = reduce_rule_object(rules, amount_to_reduce_rules_by)
 
-          fits_in_missing = find_path_to_terminal(missing_rules, stack.missing[0], token).length > 0
+          fits_in_missing = find_path_to_terminal(missing_rules, stack[0].missing, token).length > 0
         }
 
+        // now need to do something useful with this information
         if(fits_in_maybe_not_really_completed) {
           console.log('fits_in_maybe_not_really_completed')
         } else if(fits_in_missing) {
@@ -594,14 +595,6 @@ const Parser = function(input, options) {
         } else {
           console.log('this is probably a syntax error, did not fit inside maybe_not_really_completed and missing[0]')
         }
-
-        // this is wrong, i need to find out where last(stack).maybe_not_really_completed begins in last(stack).rule and then have to do the check with that
-        // Incase of prec_10 being on the stack and maybe_not_really_completed being prec_1 this would mean that prec_1 starts after "id(". Meaning that the
-        // check has to be done for all items after that (so reduce by 2 because the items that came before are 2 (does that really work, is reducing right here?))
-        console.log(
-          'I now need to check wether %s is actually not completed by checking if %s and %s match it, after that do the same for the first item of missing (%s)', 
-          last(stack).maybe_not_really_completed, last(stack).children.map(part => typeof part === 'string' ? part : part.rule).join(''), token, last(stack).missing[0]
-        )
 
         debugger
 

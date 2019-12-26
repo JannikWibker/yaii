@@ -21,10 +21,10 @@ Terminology:
 
 Method:
 - **(1)** search for matching rules for `token` and `next_token`
-- **(2)** push the match to the `stack`
+- **(2)** push the matches to the `stack`
 - **(3)** take a look what parts of the rule on the `stack` are still missing
   - **(3.1)** nothing missing: are there still more tokens:
-    - **(3.1.1)**: yes: lower the precedence of the rule on the `stack` till a rule matches for teh current rule on the stack and the `token`. While searching use the rule as `token` and the original `token` as `next_token`, continue to **(3.2.1)**
+    - **(3.1.1)**: yes: lower the precedence of the rule on the `stack` until a rule matches for the current rule on the stack and the `token`. While searching use the rule as `token` and the original `token` as `next_token`, continue to **(3.2.1)**
     - **(3.1.2)**: no: **parsing complete**
   - **(3.2)** still something missing:
     - **(3.2.1)** continue to the next tokens
